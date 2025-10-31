@@ -30,16 +30,13 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 import qrcode
 import zipfile
+
+# 👇 this is the only global we need for QR
+# on Render, set VERIFY_BASE_URL in the dashboard
 VERIFY_BASE_URL = os.getenv("VERIFY_BASE_URL", "http://localhost:5000")
 
 app = Flask(__name__)
 app.secret_key = "your-secret-key-change-this"
-
-# for QR links – change this in production
-verify_url = f"{VERIFY_BASE_URL}/verify/{cert_id}"
-qr = qrcode.QRCode(version=1, box_size=3, border=2)
-qr.add_data(verify_url)
-qr.make(fit=True)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -125,6 +122,7 @@ def build_pdf_from_row(cert, style="default"):
     c = canvas.Canvas(pdf_buffer, pagesize=landscape(letter))
     width, height = landscape(letter)
 
+    # background
     if style == "classic":
         c.setFillColorRGB(1, 1, 1)
         c.rect(0, 0, width, height, fill=True, stroke=False)
@@ -132,7 +130,6 @@ def build_pdf_from_row(cert, style="default"):
         c.setLineWidth(4)
         c.rect(25, 25, width - 50, height - 50, fill=False, stroke=True)
     else:
-        # default
         c.setFillColorRGB(0.95, 0.95, 1)
         c.rect(0, 0, width, height, fill=True, stroke=False)
         c.setStrokeColorRGB(0.2, 0.2, 0.6)
@@ -148,7 +145,7 @@ def build_pdf_from_row(cert, style="default"):
     c.setStrokeColorRGB(0.7, 0.7, 0.7)
     c.line(150, height - 130, width - 150, height - 130)
 
-    # text
+    # body text
     c.setFillColorRGB(0, 0, 0)
     c.setFont("Helvetica", 16)
     c.drawCentredString(width / 2, height - 180, "This is to certify that")
@@ -170,7 +167,7 @@ def build_pdf_from_row(cert, style="default"):
     c.setFont("Helvetica", 14)
     c.drawCentredString(width / 2, height - 370, f"Date of Completion: {issue_date}")
 
-    # QR
+    # ✅ QR (here we DO have cert_id)
     verify_url = f"{VERIFY_BASE_URL}/verify/{cert_id}"
     qr = qrcode.QRCode(version=1, box_size=3, border=2)
     qr.add_data(verify_url)
@@ -183,34 +180,17 @@ def build_pdf_from_row(cert, style="default"):
     c.setFont("Helvetica", 8)
     c.drawString(50, 35, "Scan to verify")
 
-    # signature
-    # c.setStrokeColorRGB(0, 0, 0)
-    # c.line(width - 250, 100, width - 100, 100)
-    # c.setFont("Helvetica", 12)
-    # c.drawCentredString(width - 175, 80, "Authorized Signature")
-
-    # Text-only stylish signature (Joshna)
+    # ✅ text signature (Joshna)
     c.setStrokeColorRGB(0, 0, 0)
-    c.line(width - 250, 100, width - 100, 100)  # base line (optional)
-
-    # name (stylish)
-    c.setFont("Helvetica-Oblique", 18)  # italic, bigger
+    c.line(width - 250, 100, width - 100, 100)  # base line
+    c.setFont("Helvetica-Oblique", 18)
     c.setFillColorRGB(0.1, 0.1, 0.1)
     c.drawCentredString(width - 175, 108, "Joshna")
-
-    # role / label
     c.setFont("Helvetica", 10)
     c.setFillColorRGB(0, 0, 0)
     c.drawCentredString(width - 175, 88, "Authorized Signature")
 
-    # decorative swoosh above signature
-    # c.setStrokeColorRGB(0.75, 0.75, 0.75)
-    # c.setLineWidth(1)
-    # c.line(width - 245, 120, width - 105, 120)
-
-
-
-    # cert id footer
+    # footer cert id
     c.setFont("Helvetica", 8)
     c.drawString(width - 200, 35, f"Certificate ID: {cert_id}")
 
@@ -574,5 +554,6 @@ def api_list_certificates():
 
 if __name__ == "__main__":
     init_db()
-    # 0.0.0.0 so you can test from another device in LAN too
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    port = int(os.getenv("PORT", 5000))
+    # debug=False for Render
+    app.run(debug=False, host="0.0.0.0", port=port)
