@@ -30,12 +30,16 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 import qrcode
 import zipfile
+VERIFY_BASE_URL = os.getenv("VERIFY_BASE_URL", "http://localhost:5000")
 
 app = Flask(__name__)
 app.secret_key = "your-secret-key-change-this"
 
 # for QR links – change this in production
-VERIFY_BASE_URL = os.getenv("VERIFY_BASE_URL", "http://localhost:5000")
+verify_url = f"{VERIFY_BASE_URL}/verify/{cert_id}"
+qr = qrcode.QRCode(version=1, box_size=3, border=2)
+qr.add_data(verify_url)
+qr.make(fit=True)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
