@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Certificate Generator{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        {% if current_user.is_authenticated %}
+        <div class="navbar">
+            <h1>🎓 Certificate Generator</h1>
+            <nav>
+                <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('generate') }}">Generate</a>
+                <a href="{{ url_for('view_certificates') }}">Certificates</a>
+                {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('manage_users') }}">Users</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}">Logout ({{ current_user.username }})</a>
+            </nav>
+        </div>
+        {% endif %}
+
+        <div class="content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>

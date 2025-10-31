@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Certificates{% endblock %}
+{% block content %}
+<h2>Certificates</h2>
+<p><a class="btn btn-secondary" href="{{ url_for('download_all') }}">Download All (ZIP)</a></p>
+<table>
+    <tr>
+        <th>Certificate ID</th>
+        <th>Name</th>
+        <th>Course</th>
+        <th>Issue Date</th>
+        <th>Actions</th>
+    </tr>
+    {% for c in certificates %}
+    <tr>
+        <td>{{ c[0] }}</td>
+        <td>{{ c[1] }}</td>
+        <td>{{ c[2] }}</td>
+        <td>{{ c[3] }}</td>
+        <td>
+            <a class="btn btn-primary" href="{{ url_for('download_certificate', cert_id=c[0]) }}">PDF</a>
+            <a class="btn btn-secondary" href="{{ url_for('download_certificate', cert_id=c[0], style='classic') }}">Classic</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

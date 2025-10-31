@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+{% block content %}
+
+<style>
+.login-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 20px;
+  padding: 40px 50px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  color: #fff;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.login-card h2 {
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 30px;
+  letter-spacing: 1px;
+}
+
+.login-card .form-group {
+  margin-bottom: 20px;
+}
+
+.login-card label {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.login-card input {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 15px;
+  transition: all 0.3s ease;
+}
+
+.login-card input::placeholder {
+  color: rgba(255,255,255,0.6);
+}
+
+.login-card input:focus {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 2px #a78bfa;
+}
+
+.login-card button {
+  width: 100%;
+  background: linear-gradient(90deg, #6d28d9, #8b5cf6);
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+
+.login-card button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(109, 40, 217, 0.4);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+<div class="login-wrapper">
+  <form method="post" class="login-card">
+    <h2>Welcome Back 👋</h2>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" name="username" placeholder="Enter username" required>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Enter password" required>
+    </div>
+    <button type="submit">Login</button>
+  </form>
+</div>
+
+{% endblock %}
