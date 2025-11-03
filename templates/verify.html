@@ -1,13 +1,53 @@
-{% extends 'base.html' %}
-{% block title %}Verify{% endblock %}
+{% extends "base.html" %}
+
 {% block content %}
-{% if cert.valid %}
-  <h2>✅ Certificate is valid</h2>
-  <p><strong>ID:</strong> {{ cert.id }}</p>
-  <p><strong>Name:</strong> {{ cert.name }}</p>
-  <p><strong>Course:</strong> {{ cert.course }}</p>
-  <p><strong>Date:</strong> {{ cert.date }}</p>
-{% else %}
-  <h2>❌ Certificate not found</h2>
-{% endif %}
+<div style="max-width: 600px; margin: 30px auto; text-align: center;">
+    <h2 style="color: #4C51BF; margin-bottom: 30px; font-size: clamp(20px, 5vw, 28px);">Certificate Verification</h2>
+    
+    {% if cert.valid %}
+    <div style="background: #D1FAE5; padding: 30px 20px; border-radius: 10px; border: 3px solid #10B981;">
+        <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
+        <h3 style="color: #065F46; margin-bottom: 20px; font-size: clamp(18px, 4vw, 24px);">Certificate Verified</h3>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-top: 20px; text-align: left;">
+            <div style="margin-bottom: 15px; word-break: break-all;">
+                <strong style="color: #6B7280; font-size: 14px;">Certificate ID:</strong><br>
+                <span style="color: #111827; font-size: clamp(14px, 3vw, 18px);">{{ cert.id }}</span>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <strong style="color: #6B7280; font-size: 14px;">Recipient Name:</strong><br>
+                <span style="color: #111827; font-size: clamp(14px, 3vw, 18px);">{{ cert.name }}</span>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <strong style="color: #6B7280; font-size: 14px;">Course:</strong><br>
+                <span style="color: #111827; font-size: clamp(14px, 3vw, 18px);">{{ cert.course }}</span>
+            </div>
+            
+            <div>
+                <strong style="color: #6B7280; font-size: 14px;">Issue Date:</strong><br>
+                <span style="color: #111827; font-size: clamp(14px, 3vw, 18px);">{{ cert.date }}</span>
+            </div>
+        </div>
+        
+        <p style="color: #065F46; margin-top: 20px; font-size: 14px;">
+            This certificate is authentic and was issued by our system.
+        </p>
+    </div>
+    {% else %}
+    <div style="background: #FEE2E2; padding: 30px 20px; border-radius: 10px; border: 3px solid #EF4444;">
+        <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
+        <h3 style="color: #991B1B; margin-bottom: 20px; font-size: clamp(18px, 4vw, 24px);">Certificate Not Found</h3>
+        <p style="color: #7F1D1D; font-size: 15px;">
+            The certificate ID you entered could not be verified.<br>
+            Please check the ID and try again.
+        </p>
+    </div>
+    {% endif %}
+    
+    <div style="margin-top: 30px;">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to Home</a>
+    </div>
+</div>
 {% endblock %}

@@ -1,40 +1,193 @@
-{% extends 'base.html' %}
-{% block title %}Users{% endblock %}
-{% block content %}
-<h2>Users</h2>
-<form method="post" action="{{ url_for('add_user') }}" class="form">
-    <div class="form-group">
-        <label>Username</label>
-        <input type="text" name="username" required>
-    </div>
-    <div class="form-group">
-        <label>Password</label>
-        <input type="password" name="password" required>
-    </div>
-    <div class="form-group">
-        <label>Role</label>
-        <select name="role">
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-        </select>
-    </div>
-    <button class="btn btn-primary">Add User</button>
-</form>
+{% extends "base.html" %}
 
-<table>
-    <tr>
-        <th>ID</th>
-        <th>Username</th>
-        <th>Role</th>
-        <th>Created</th>
-    </tr>
-    {% for u in users %}
-    <tr>
-        <td>{{ u[0] }}</td>
-        <td>{{ u[1] }}</td>
-        <td>{{ u[2] }}</td>
-        <td>{{ u[3] }}</td>
-    </tr>
+{% block content %}
+<style>
+    /* Mobile Card View for Users */
+    .user-card {
+        background: #F9FAFB;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+        border-left: 4px solid #4C51BF;
+    }
+    
+    .user-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .user-name {
+        font-weight: 600;
+        color: #111827;
+        font-size: 16px;
+    }
+    
+    .user-role-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .user-role-admin {
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+    
+    .user-role-user {
+        background: #E5E7EB;
+        color: #374151;
+    }
+    
+    .user-detail {
+        margin-bottom: 8px;
+    }
+    
+    .user-label {
+        color: #6B7280;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+        width: 80px;
+    }
+    
+    .user-value {
+        color: #111827;
+        font-size: 14px;
+    }
+    
+    /* Desktop Table View */
+    .desktop-users-table {
+        display: none;
+    }
+    
+    .mobile-user-cards {
+        display: block;
+    }
+    
+    @media (min-width: 768px) {
+        .desktop-users-table {
+            display: block;
+        }
+        
+        .mobile-user-cards {
+            display: none;
+        }
+    }
+    
+    /* Form styling */
+    .add-user-form {
+        background: #F9FAFB;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+    }
+    
+    @media (min-width: 768px) {
+        .add-user-form form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .add-user-form .form-group:last-of-type {
+            grid-column: span 2;
+        }
+        
+        .add-user-form button {
+            width: auto;
+            justify-self: start;
+        }
+    }
+</style>
+
+<div class="page-header">
+    <h2>User Management</h2>
+</div>
+
+<div class="add-user-form">
+    <h3 style="margin-bottom: 20px; font-size: 18px;">Add New User</h3>
+    <form method="POST" action="{{ url_for('add_user') }}">
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="role">Role</label>
+            <select id="role" name="role" required>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Add User</button>
+    </form>
+</div>
+
+<!-- Mobile Card View -->
+<div class="mobile-user-cards">
+    {% for user in users %}
+    <div class="user-card">
+        <div class="user-card-header">
+            <div class="user-name">{{ user[1] }}</div>
+            <div class="user-role-badge {% if user[2] == 'admin' %}user-role-admin{% else %}user-role-user{% endif %}">
+                {{ user[2].upper() }}
+            </div>
+        </div>
+        
+        <div class="user-detail">
+            <span class="user-label">User ID:</span>
+            <span class="user-value">#{{ user[0] }}</span>
+        </div>
+        
+        <div class="user-detail">
+            <span class="user-label">Created:</span>
+            <span class="user-value">{{ user[3][:19] }}</span>
+        </div>
+    </div>
     {% endfor %}
-</table>
+</div>
+
+<!-- Desktop Table View -->
+<div class="desktop-users-table">
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Created At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user[0] }}</td>
+                    <td><strong>{{ user[1] }}</strong></td>
+                    <td>
+                        <span style="padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap;
+                                     {% if user[2] == 'admin' %}
+                                     background: #DBEAFE; color: #1E40AF;
+                                     {% else %}
+                                     background: #E5E7EB; color: #374151;
+                                     {% endif %}">
+                            {{ user[2].upper() }}
+                        </span>
+                    </td>
+                    <td style="font-size: 12px;">{{ user[3][:19] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}

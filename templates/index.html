@@ -1,6 +1,39 @@
-{% extends 'base.html' %}
-{% block title %}Welcome{% endblock %}
+{% extends "base.html" %}
+
 {% block content %}
-<h2>Welcome to the Certificate Generator</h2>
-<p><a class="btn btn-primary" href="{{ url_for('login') }}">Login</a></p>
+<div style="text-align: center; padding: 30px 0;">
+    <h1 style="font-size: clamp(28px, 6vw, 48px); color: #4C51BF; margin-bottom: 20px; line-height: 1.2;">
+        🎓 Certificate Generator System
+    </h1>
+    <p style="font-size: clamp(16px, 3vw, 20px); color: #6B7280; margin-bottom: 30px; padding: 0 10px;">
+        Create professional certificates with QR code verification
+    </p>
+    
+    <div class="btn-group" style="justify-content: center; max-width: 500px; margin: 0 auto 50px;">
+        <a href="{{ url_for('login') }}" class="btn btn-primary" style="font-size: 18px; padding: 15px 30px;">
+            Login
+        </a>
+        <a href="#" class="btn btn-secondary" style="font-size: 18px; padding: 15px 30px;"
+           onclick="event.preventDefault(); var id = prompt('Enter Certificate ID:'); if(id) window.location.href='/verify/'+id;">
+            Verify Certificate
+        </a>
+    </div>
+    
+    <div class="grid" style="text-align: left; margin-top: 40px;">
+        <div style="background: #F3F4F6; padding: 25px; border-radius: 10px;">
+            <h3 style="color: #4C51BF; margin-bottom: 15px; font-size: 18px;">📝 Easy Generation</h3>
+            <p style="color: #6B7280; font-size: 15px;">Upload names in bulk and generate certificates instantly with customizable course details.</p>
+        </div>
+        
+        <div style="background: #F3F4F6; padding: 25px; border-radius: 10px;">
+            <h3 style="color: #4C51BF; margin-bottom: 15px; font-size: 18px;">🔒 Secure Verification</h3>
+            <p style="color: #6B7280; font-size: 15px;">Each certificate includes a unique QR code for instant authenticity verification.</p>
+        </div>
+        
+        <div style="background: #F3F4F6; padding: 25px; border-radius: 10px;">
+            <h3 style="color: #4C51BF; margin-bottom: 15px; font-size: 18px;">👥 Role Management</h3>
+            <p style="color: #6B7280; font-size: 15px;">Admin and user roles with different permissions for better control and security.</p>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -1,15 +1,43 @@
-{% extends 'base.html' %}
-{% block title %}Dashboard{% endblock %}
+{% extends "base.html" %}
+
 {% block content %}
-<h2>Dashboard</h2>
+<div class="page-header">
+    <h2>Dashboard</h2>
+</div>
+
 <div class="stats">
     <div class="stat-card">
         <h3>{{ total_certs }}</h3>
-        <p>Total Certificates</p>
+        <p>Total Certificates Generated</p>
     </div>
-    <div class="stat-card">
+    
+    {% if current_user.role == 'admin' %}
+    <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
         <h3>{{ total_users }}</h3>
         <p>Total Users</p>
     </div>
+    {% endif %}
+</div>
+
+<div class="grid">
+    <div style="background: #F3F4F6; padding: 25px; border-radius: 10px; text-align: center;">
+        <h3 style="color: #4C51BF; margin-bottom: 15px; font-size: 18px;">Generate Certificates</h3>
+        <p style="color: #6B7280; margin-bottom: 20px; font-size: 14px;">Create new certificates in bulk</p>
+        <a href="{{ url_for('generate') }}" class="btn btn-primary">Generate Now</a>
+    </div>
+    
+    <div style="background: #F3F4F6; padding: 25px; border-radius: 10px; text-align: center;">
+        <h3 style="color: #4C51BF; margin-bottom: 15px; font-size: 18px;">View Certificates</h3>
+        <p style="color: #6B7280; margin-bottom: 20px; font-size: 14px;">Browse and download certificates</p>
+        <a href="{{ url_for('view_certificates') }}" class="btn btn-primary">View All</a>
+    </div>
+    
+    {% if current_user.role == 'admin' %}
+    <div style="background: #F3F4F6; padding: 25px; border-radius: 10px; text-align: center;">
+        <h3 style="color: #4C51BF; margin-bottom: 15px; font-size: 18px;">Manage Users</h3>
+        <p style="color: #6B7280; margin-bottom: 20px; font-size: 14px;">Add or remove system users</p>
+        <a href="{{ url_for('manage_users') }}" class="btn btn-primary">Manage</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

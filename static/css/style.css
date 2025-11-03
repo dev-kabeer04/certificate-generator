@@ -1,129 +1,199 @@
+/* Base Styles */
 * { box-sizing: border-box; }
 
 body {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 10px;
 }
 
 .container {
-  max-width: 1200px;
-  margin: 0 auto;
-  background: #fff;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
 }
 
+/* --- Navigation Bar (Desktop/Base) --- */
 .navbar {
-  background: #4C51BF;
-  color: #fff;
-  padding: 15px 30px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+    background: #4C51BF;
+    color: #fff;
+    padding: 15px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.navbar h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.navbar nav {
+    display: flex;
+    gap: 15px;
 }
 
 .navbar nav a {
-  color: #fff;
-  margin-left: 15px;
-  text-decoration: none;
+    color: #fff;
+    text-decoration: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.2s;
 }
 
+.navbar nav a:hover {
+    background: #4338CA;
+}
+
+/* Hide hamburger elements on desktop */
+.hamburger {
+    display: none;
+    cursor: pointer;
+}
+
+.menu-toggle {
+    display: none; /* Hide the checkbox */
+}
+
+/* --- Content and Forms --- */
 .content {
-  padding: 30px;
+    padding: 30px;
 }
 
 .btn {
-  display: inline-block;
-  padding: 8px 16px;
-  border-radius: 5px;
-  border: none;
-  text-decoration: none;
-  cursor: pointer;
-  transition: 0.2s;
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 5px;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    transition: 0.2s;
 }
 
-.btn-primary {
-  background: #4C51BF;
-  color: #fff;
-}
+.btn-primary { background: #4C51BF; color: #fff; }
+.btn-primary:hover { background: #4338CA; }
+.btn-secondary { background: #6B7280; color: #fff; }
 
-.btn-primary:hover {
-  background: #4338CA;
-}
-
-.btn-secondary {
-  background: #6B7280;
-  color: #fff;
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-.form-group label {
-  font-weight: 600;
-  display: block;
-  margin-bottom: 4px;
-}
-
+.form-group { margin-bottom: 15px; }
+.form-group label { font-weight: 600; display: block; margin-bottom: 4px; }
 .form-group input,
 .form-group textarea,
 .form-group select {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+/* --- Tables: Responsive Wrapper --- */
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto; /* IMPORTANT: Enables horizontal scroll on mobile */
+    margin-top: 20px;
+    /* This style will apply to both Certificates and Users pages */
 }
 
 table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
+    width: 100%;
+    min-width: 600px; /* Ensure table forces scroll when content exceeds 600px */
+    border-collapse: collapse;
 }
 
 th, td {
-  border-bottom: 1px solid #eee;
-  padding: 10px;
-  text-align: left;
+    border-bottom: 1px solid #eee;
+    padding: 10px;
+    text-align: left;
+    white-space: nowrap; /* Prevent cell content from wrapping */
 }
 
-th {
-  background: #F3F4F6;
-}
+th { background: #F3F4F6; }
 
-.flash-messages {
-  margin-bottom: 15px;
-}
+/* --- Flash Messages --- */
+.flash-messages { margin-bottom: 15px; }
+.flash { padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+.flash.success { background: #D1FAE5; color: #065F46; }
+.flash.error { background: #FEE2E2; color: #991B1B; }
 
-.flash {
-  padding: 10px;
-  border-radius: 5px;
-  margin-bottom: 10px;
-}
-
-.flash.success {
-  background: #D1FAE5;
-  color: #065F46;
-}
-
-.flash.error {
-  background: #FEE2E2;
-  color: #991B1B;
-}
-
-.stats {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
+/* --- Dashboard Stats --- */
+.stats { display: flex; gap: 15px; flex-wrap: wrap; }
 .stat-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  min-width: 200px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    min-width: 200px;
+    flex: 1 1 45%; /* Adjusted flex basis for better medium-screen layout */
+    text-align: center;
+}
+
+/* ================================================= */
+/* MOBILE VIEW (MAX-WIDTH: 768PX)           */
+/* ================================================= */
+
+@media (max-width: 768px) {
+    /* --- Navbar: Hamburger Setup --- */
+    .navbar {
+        flex-direction: row; /* Keep title and hamburger on one line */
+        justify-content: space-between;
+        padding: 10px 20px;
+    }
+    
+    .navbar h1 {
+        font-size: 1.3em;
+    }
+
+    /* Display the hamburger icon */
+    .hamburger {
+        display: block;
+        font-size: 1.8em;
+        padding: 0 5px;
+        order: 2; /* Place hamburger on the right */
+    }
+
+    /* Navigation Menu (Hidden by default) */
+    .navbar nav {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        background: #4338CA; /* Darker background for menu */
+        position: absolute;
+        top: 60px; /* Adjust based on navbar height */
+        left: 0;
+        z-index: 100;
+        padding: 10px 0;
+        box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+    }
+    
+    .navbar nav a {
+        padding: 12px 20px;
+        border-radius: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Toggle: Show menu when checkbox is checked */
+    .menu-toggle:checked ~ nav {
+        display: flex;
+    }
+
+    /* --- General Mobile Adjustments --- */
+    body {
+        padding: 5px;
+    }
+
+    .content {
+        padding: 15px;
+    }
+
+    /* Stack stat cards vertically */
+    .stat-card {
+        flex: 1 1 100%;
+    }
+    
+    /* Tables scrolling is already handled by the .table-wrapper
+       No need for specific table media queries here. */
 }

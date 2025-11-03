@@ -1,559 +1,335 @@
-import os
-import io
-import csv
-import uuid
-import sqlite3
-from datetime import datetime
-
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash,
-    send_file,
-    jsonify,
-)
-from flask_login import (
-    LoginManager,
-    UserMixin,
-    login_user,
-    logout_user,
-    login_required,
-    current_user,
-)
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session, jsonify
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import qrcode
-import zipfile
-
-# 👇 this is the only global we need for QR
-# on Render, set VERIFY_BASE_URL in the dashboard
-VERIFY_BASE_URL = os.getenv("VERIFY_BASE_URL", "http://localhost:5000")
+import sqlite3
+import os
+from datetime import datetime
+import io
+import csv
 
 app = Flask(__name__)
-app.secret_key = "your-secret-key-change-this"
+app.secret_key = 'your-secret-key-change-this-in-production'
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = "login"
+login_manager.login_view = 'login'
 
-
-# ===================== DB SETUP =====================
+# Database setup
 def init_db():
-    conn = sqlite3.connect("certificates.db")
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-
-    # users
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """
-    )
-
-    # certificates
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS certificates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            certificate_id TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            course_name TEXT NOT NULL,
-            issue_date TEXT NOT NULL,
-            email TEXT,
-            created_by INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (created_by) REFERENCES users(id)
-        )
-    """
-    )
-
-    # seed admin
-    c.execute("SELECT * FROM users WHERE username='admin'")
+    
+    # Users table
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE NOT NULL,
+                  password TEXT NOT NULL,
+                  role TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Certificates table
+    c.execute('''CREATE TABLE IF NOT EXISTS certificates
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  certificate_id TEXT UNIQUE NOT NULL,
+                  name TEXT NOT NULL,
+                  course_name TEXT NOT NULL,
+                  issue_date TEXT NOT NULL,
+                  created_by INTEGER,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (created_by) REFERENCES users(id))''')
+    
+    # Create default admin if not exists
+    c.execute("SELECT * FROM users WHERE username = 'admin'")
     if not c.fetchone():
-        admin_pass = generate_password_hash("admin123")
-        c.execute(
-            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-            ("admin", admin_pass, "admin"),
-        )
-
+        admin_pass = generate_password_hash('admin123')
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                  ('admin', admin_pass, 'admin'))
+    
     conn.commit()
     conn.close()
 
-
-# ===================== USER MODEL =====================
+# User class for Flask-Login
 class User(UserMixin):
     def __init__(self, id, username, role):
         self.id = id
         self.username = username
         self.role = role
 
-
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect("certificates.db")
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
     c.execute("SELECT id, username, role FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
+    user = c.fetchone()
     conn.close()
-    if row:
-        return User(row[0], row[1], row[2])
+    if user:
+        return User(user[0], user[1], user[2])
     return None
 
-
-# ===================== PDF HELPER =====================
-def build_pdf_from_row(cert, style="default"):
-    """
-    cert = (certificate_id, name, course_name, issue_date)
-    """
-    cert_id, name, course_name, issue_date = cert
-
-    pdf_buffer = io.BytesIO()
-    c = canvas.Canvas(pdf_buffer, pagesize=landscape(letter))
-    width, height = landscape(letter)
-
-    # background
-    if style == "classic":
-        c.setFillColorRGB(1, 1, 1)
-        c.rect(0, 0, width, height, fill=True, stroke=False)
-        c.setStrokeColorRGB(0.1, 0.1, 0.1)
-        c.setLineWidth(4)
-        c.rect(25, 25, width - 50, height - 50, fill=False, stroke=True)
-    else:
-        c.setFillColorRGB(0.95, 0.95, 1)
-        c.rect(0, 0, width, height, fill=True, stroke=False)
-        c.setStrokeColorRGB(0.2, 0.2, 0.6)
-        c.setLineWidth(3)
-        c.rect(30, 30, width - 60, height - 60, fill=False, stroke=True)
-
-    # title
-    c.setFillColorRGB(0.1, 0.1, 0.5)
-    c.setFont("Helvetica-Bold", 40)
-    c.drawCentredString(width / 2, height - 100, "CERTIFICATE OF COMPLETION")
-
-    # divider
-    c.setStrokeColorRGB(0.7, 0.7, 0.7)
-    c.line(150, height - 130, width - 150, height - 130)
-
-    # body text
-    c.setFillColorRGB(0, 0, 0)
-    c.setFont("Helvetica", 16)
-    c.drawCentredString(width / 2, height - 180, "This is to certify that")
-
-    # name
-    c.setFillColorRGB(0.1, 0.1, 0.5)
-    c.setFont("Helvetica-Bold", 32)
-    c.drawCentredString(width / 2, height - 230, name)
-
-    # course text
-    c.setFillColorRGB(0, 0, 0)
-    c.setFont("Helvetica", 16)
-    c.drawCentredString(width / 2, height - 280, "has successfully completed the course")
-
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(width / 2, height - 320, course_name)
-
-    # date
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(width / 2, height - 370, f"Date of Completion: {issue_date}")
-
-    # ✅ QR (here we DO have cert_id)
-    verify_url = f"{VERIFY_BASE_URL}/verify/{cert_id}"
-    qr = qrcode.QRCode(version=1, box_size=3, border=2)
-    qr.add_data(verify_url)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="black", back_color="white")
-    qr_buffer = io.BytesIO()
-    qr_img.save(qr_buffer, format="PNG")
-    qr_buffer.seek(0)
-    c.drawImage(ImageReader(qr_buffer), 50, 50, width=80, height=80)
-    c.setFont("Helvetica", 8)
-    c.drawString(50, 35, "Scan to verify")
-
-    # ✅ text signature (Joshna)
-    c.setStrokeColorRGB(0, 0, 0)
-    c.line(width - 250, 100, width - 100, 100)  # base line
-    c.setFont("Helvetica-Oblique", 18)
-    c.setFillColorRGB(0.1, 0.1, 0.1)
-    c.drawCentredString(width - 175, 108, "Joshna")
-    c.setFont("Helvetica", 10)
-    c.setFillColorRGB(0, 0, 0)
-    c.drawCentredString(width - 175, 88, "Authorized Signature")
-
-    # footer cert id
-    c.setFont("Helvetica", 8)
-    c.drawString(width - 200, 35, f"Certificate ID: {cert_id}")
-
-    c.save()
-    pdf_buffer.seek(0)
-    return pdf_buffer.getvalue()
-
-
-# ===================== ROUTES =====================
-
-@app.route("/")
+# Routes
+@app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template('index.html')
 
-
-# ---------- AUTH ----------
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-
-        conn = sqlite3.connect("certificates.db")
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        conn = sqlite3.connect('certificates.db')
         c = conn.cursor()
-        c.execute(
-            "SELECT id, username, password, role FROM users WHERE username = ?",
-            (username,),
-        )
-        row = c.fetchone()
+        c.execute("SELECT id, username, password, role FROM users WHERE username = ?", (username,))
+        user = c.fetchone()
         conn.close()
-
-        if row and check_password_hash(row[2], password):
-            user = User(row[0], row[1], row[3])
-            login_user(user)
-            flash("Login successful!", "success")
-            return redirect(url_for("dashboard"))
+        
+        if user and check_password_hash(user[2], password):
+            user_obj = User(user[0], user[1], user[3])
+            login_user(user_obj)
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
         else:
-            flash("Invalid username or password", "error")
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
 
-    return render_template("login.html")
-
-
-@app.route("/logout")
+@app.route('/logout')
 @login_required
 def logout():
     logout_user()
-    flash("Logged out successfully", "success")
-    return redirect(url_for("index"))
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('index'))
 
-
-# ---------- DASHBOARD ----------
-@app.route("/dashboard")
+@app.route('/dashboard')
 @login_required
 def dashboard():
-    conn = sqlite3.connect("certificates.db")
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-
-    if current_user.role == "admin":
+    
+    if current_user.role == 'admin':
         c.execute("SELECT COUNT(*) FROM certificates")
         total_certs = c.fetchone()[0]
         c.execute("SELECT COUNT(*) FROM users")
         total_users = c.fetchone()[0]
     else:
-        c.execute(
-            "SELECT COUNT(*) FROM certificates WHERE created_by = ?",
-            (current_user.id,),
-        )
+        c.execute("SELECT COUNT(*) FROM certificates WHERE created_by = ?", (current_user.id,))
         total_certs = c.fetchone()[0]
         total_users = 0
-
+    
     conn.close()
-    return render_template(
-        "dashboard.html",
-        total_certs=total_certs,
-        total_users=total_users,
-    )
+    
+    return render_template('dashboard.html', total_certs=total_certs, total_users=total_users)
 
-
-# ---------- GENERATE ----------
-@app.route("/generate", methods=["GET", "POST"])
+@app.route('/generate', methods=['GET', 'POST'])
 @login_required
 def generate():
-    if request.method == "POST":
-        course_name = request.form.get("course_name")
-        issue_date = request.form.get("issue_date")
-
-        names = []
-        emails = {}
-
-        # CSV upload
-        file = request.files.get("csv_file")
-        if file and file.filename.endswith(".csv"):
-            stream = io.StringIO(file.stream.read().decode("utf-8"))
-            reader = csv.reader(stream)
-            for row in reader:
-                if not row:
-                    continue
-                name = row[0].strip()
-                if not name:
-                    continue
-                names.append(name)
-                if len(row) > 1 and row[1].strip():
-                    emails[name] = row[1].strip()
-        else:
-            # textarea
-            names_input = request.form.get("names", "")
-            for line in names_input.splitlines():
-                line = line.strip()
-                if line:
-                    names.append(line)
-
-        conn = sqlite3.connect("certificates.db")
+    if request.method == 'POST':
+        course_name = request.form['course_name']
+        issue_date = request.form['issue_date']
+        names_input = request.form['names']
+        
+        # Parse names (either CSV upload or text input)
+        names = [name.strip() for name in names_input.split('\n') if name.strip()]
+        
+        conn = sqlite3.connect('certificates.db')
         c = conn.cursor()
-        generated = 0
-
+        
+        generated_count = 0
         for name in names:
-            unique_part = uuid.uuid4().hex[:6].upper()
-            cert_id = f"CERT-{datetime.now().strftime('%Y%m%d%H%M%S')}-{unique_part}"
-            email = emails.get(name, None)
+            cert_id = f"CERT-{datetime.now().strftime('%Y%m%d')}-{generated_count + 1:04d}"
+            
             try:
-                c.execute(
-                    """
-                    INSERT INTO certificates
-                    (certificate_id, name, course_name, issue_date, email, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        cert_id,
-                        name,
-                        course_name,
-                        issue_date,
-                        email,
-                        current_user.id,
-                    ),
-                )
-                generated += 1
+                c.execute('''INSERT INTO certificates 
+                            (certificate_id, name, course_name, issue_date, created_by)
+                            VALUES (?, ?, ?, ?, ?)''',
+                         (cert_id, name, course_name, issue_date, current_user.id))
+                generated_count += 1
             except sqlite3.IntegrityError:
-                # skip duplicate
                 continue
-
+        
         conn.commit()
         conn.close()
+        
+        flash(f'Successfully generated {generated_count} certificates!', 'success')
+        return redirect(url_for('view_certificates'))
+    
+    return render_template('generate.html')
 
-        flash(f"Successfully generated {generated} certificates!", "success")
-        return redirect(url_for("view_certificates"))
-
-    return render_template("generate.html")
-
-
-# ---------- LIST CERTS ----------
-@app.route("/certificates")
+@app.route('/certificates')
 @login_required
 def view_certificates():
-    conn = sqlite3.connect("certificates.db")
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-
-    if current_user.role == "admin":
-        c.execute(
-            """
-            SELECT certificate_id, name, course_name, issue_date, created_at
-            FROM certificates
-            ORDER BY created_at DESC
-        """
-        )
+    
+    if current_user.role == 'admin':
+        c.execute('''SELECT c.id, c.certificate_id, c.name, c.course_name, c.issue_date, c.created_at
+                     FROM certificates c ORDER BY c.created_at DESC''')
     else:
-        c.execute(
-            """
-            SELECT certificate_id, name, course_name, issue_date, created_at
-            FROM certificates
-            WHERE created_by = ?
-            ORDER BY created_at DESC
-        """,
-            (current_user.id,),
-        )
-
-    certs = c.fetchall()
+        c.execute('''SELECT c.id, c.certificate_id, c.name, c.course_name, c.issue_date, c.created_at
+                     FROM certificates c WHERE c.created_by = ? ORDER BY c.created_at DESC''',
+                 (current_user.id,))
+    
+    certificates = c.fetchall()
     conn.close()
+    
+    return render_template('certificates.html', certificates=certificates)
 
-    return render_template("certificates.html", certificates=certs)
-
-
-# ---------- DOWNLOAD SINGLE ----------
-@app.route("/download/<cert_id>")
+@app.route('/download/<cert_id>')
 @login_required
 def download_certificate(cert_id):
-    style = request.args.get("style", "default")
-
-    conn = sqlite3.connect("certificates.db")
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-    c.execute(
-        """
-        SELECT certificate_id, name, course_name, issue_date
-        FROM certificates
-        WHERE certificate_id = ?
-    """,
-        (cert_id,),
-    )
-    row = c.fetchone()
+    c.execute('''SELECT certificate_id, name, course_name, issue_date 
+                 FROM certificates WHERE certificate_id = ?''', (cert_id,))
+    cert = c.fetchone()
     conn.close()
+    
+    if not cert:
+        flash('Certificate not found', 'error')
+        return redirect(url_for('view_certificates'))
+    
+    # Generate PDF
+    pdf_buffer = io.BytesIO()
+    c = canvas.Canvas(pdf_buffer, pagesize=landscape(letter))
+    width, height = landscape(letter)
+    
+    # Background
+    c.setFillColorRGB(0.95, 0.95, 1)
+    c.rect(0, 0, width, height, fill=True, stroke=False)
+    
+    # Border
+    c.setStrokeColorRGB(0.2, 0.2, 0.6)
+    c.setLineWidth(3)
+    c.rect(30, 30, width-60, height-60, fill=False, stroke=True)
+    
+    # Title
+    c.setFillColorRGB(0.1, 0.1, 0.5)
+    c.setFont("Helvetica-Bold", 40)
+    c.drawCentredString(width/2, height-100, "CERTIFICATE OF COMPLETION")
+    
+    # Divider
+    c.setStrokeColorRGB(0.7, 0.7, 0.7)
+    c.line(150, height-130, width-150, height-130)
+    
+    # Name
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 16)
+    c.drawCentredString(width/2, height-180, "This is to certify that")
+    
+    c.setFillColorRGB(0.1, 0.1, 0.5)
+    c.setFont("Helvetica-Bold", 32)
+    c.drawCentredString(width/2, height-230, cert[1])
+    
+    # Course details
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 16)
+    c.drawCentredString(width/2, height-280, "has successfully completed the course")
+    
+    c.setFont("Helvetica-Bold", 24)
+    c.drawCentredString(width/2, height-320, cert[2])
+    
+    # Date
+    c.setFont("Helvetica", 14)
+    c.drawCentredString(width/2, height-370, f"Date of Completion: {cert[3]}")
+    
+    # QR Code
+    verify_url = f"http://localhost:5000/verify/{cert[0]}"
+    qr = qrcode.QRCode(version=1, box_size=3, border=2)
+    qr.add_data(verify_url)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    
+    qr_buffer = io.BytesIO()
+    qr_img.save(qr_buffer, format='PNG')
+    qr_buffer.seek(0)
+    
+    c.drawImage(ImageReader(qr_buffer), 50, 50, width=80, height=80)
+    c.setFont("Helvetica", 8)
+    c.drawString(50, 35, "Scan to verify")
+    
+    # Signature line
+    c.setStrokeColorRGB(0, 0, 0)
+    c.line(width-250, 100, width-100, 100)
+    c.setFont("Helvetica", 12)
+    c.drawCentredString(width-175, 80, "Authorized Signature")
+    
+    # Certificate ID
+    c.setFont("Helvetica", 8)
+    c.drawString(width-200, 35, f"Certificate ID: {cert[0]}")
+    
+    c.save()
+    pdf_buffer.seek(0)
+    
+    return send_file(pdf_buffer, as_attachment=True, 
+                    download_name=f"certificate_{cert[0]}.pdf",
+                    mimetype='application/pdf')
 
-    if not row:
-        flash("Certificate not found", "error")
-        return redirect(url_for("view_certificates"))
-
-    pdf_bytes = build_pdf_from_row(row, style=style)
-    return send_file(
-        io.BytesIO(pdf_bytes),
-        as_attachment=True,
-        download_name=f"{cert_id}.pdf",
-        mimetype="application/pdf",
-    )
-
-
-# ---------- DOWNLOAD ALL AS ZIP ----------
-@app.route("/download_all")
-@login_required
-def download_all():
-    conn = sqlite3.connect("certificates.db")
-    c = conn.cursor()
-
-    if current_user.role == "admin":
-        c.execute(
-            "SELECT certificate_id, name, course_name, issue_date FROM certificates"
-        )
-    else:
-        c.execute(
-            """
-            SELECT certificate_id, name, course_name, issue_date
-            FROM certificates
-            WHERE created_by = ?
-        """,
-            (current_user.id,),
-        )
-
-    rows = c.fetchall()
-    conn.close()
-
-    mem_zip = io.BytesIO()
-    with zipfile.ZipFile(mem_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-        for row in rows:
-            pdf_bytes = build_pdf_from_row(row)
-            zf.writestr(f"{row[0]}.pdf", pdf_bytes)
-
-    mem_zip.seek(0)
-    return send_file(
-        mem_zip,
-        as_attachment=True,
-        download_name="certificates.zip",
-        mimetype="application/zip",
-    )
-
-
-# ---------- VERIFY ----------
-@app.route("/verify/<cert_id>")
+@app.route('/verify/<cert_id>')
 def verify_certificate(cert_id):
-    conn = sqlite3.connect("certificates.db")
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-    c.execute(
-        """
-        SELECT certificate_id, name, course_name, issue_date
-        FROM certificates
-        WHERE certificate_id = ?
-    """,
-        (cert_id,),
-    )
-    row = c.fetchone()
+    c.execute('''SELECT certificate_id, name, course_name, issue_date 
+                 FROM certificates WHERE certificate_id = ?''', (cert_id,))
+    cert = c.fetchone()
     conn.close()
-
-    if row:
-        cert = {
-            "id": row[0],
-            "name": row[1],
-            "course": row[2],
-            "date": row[3],
-            "valid": True,
-        }
+    
+    if cert:
+        return render_template('verify.html', cert={
+            'id': cert[0],
+            'name': cert[1],
+            'course': cert[2],
+            'date': cert[3],
+            'valid': True
+        })
     else:
-        cert = {"valid": False}
+        return render_template('verify.html', cert={'valid': False})
 
-    return render_template("verify.html", cert=cert)
-
-
-# ---------- USERS (ADMIN) ----------
-@app.route("/users")
+@app.route('/users')
 @login_required
 def manage_users():
-    if current_user.role != "admin":
-        flash("Access denied", "error")
-        return redirect(url_for("dashboard"))
-
-    conn = sqlite3.connect("certificates.db")
+    if current_user.role != 'admin':
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
     c.execute("SELECT id, username, role, created_at FROM users")
     users = c.fetchall()
     conn.close()
+    
+    return render_template('users.html', users=users)
 
-    return render_template("users.html", users=users)
-
-
-@app.route("/add_user", methods=["POST"])
+@app.route('/add_user', methods=['POST'])
 @login_required
 def add_user():
-    if current_user.role != "admin":
-        return jsonify({"error": "Access denied"}), 403
-
-    username = request.form.get("username")
-    password = request.form.get("password")
-    role = request.form.get("role", "user")
-
-    conn = sqlite3.connect("certificates.db")
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    username = request.form['username']
+    password = request.form['password']
+    role = request.form['role']
+    
+    conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-
+    
     try:
-        hashed = generate_password_hash(password)
-        c.execute(
-            "INSERT INTO users (username, password, role) VALUES (?,?,?)",
-            (username, hashed, role),
-        )
+        hashed_password = generate_password_hash(password)
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                 (username, hashed_password, role))
         conn.commit()
-        flash(f"User {username} created", "success")
+        flash(f'User {username} added successfully!', 'success')
     except sqlite3.IntegrityError:
-        flash("Username already exists", "error")
-
+        flash('Username already exists', 'error')
+    
     conn.close()
-    return redirect(url_for("manage_users"))
+    return redirect(url_for('manage_users'))
 
-
-# ---------- API ----------
-@app.route("/api/certificates", methods=["GET"])
-@login_required
-def api_list_certificates():
-    conn = sqlite3.connect("certificates.db")
-    c = conn.cursor()
-
-    if current_user.role == "admin":
-        c.execute("SELECT certificate_id, name, course_name, issue_date FROM certificates")
-    else:
-        c.execute(
-            """
-            SELECT certificate_id, name, course_name, issue_date
-            FROM certificates
-            WHERE created_by = ?
-        """,
-            (current_user.id,),
-        )
-
-    rows = c.fetchall()
-    conn.close()
-
-    data = [
-        {
-            "certificate_id": r[0],
-            "name": r[1],
-            "course_name": r[2],
-            "issue_date": r[3],
-        }
-        for r in rows
-    ]
-    return jsonify(data)
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     init_db()
-    port = int(os.getenv("PORT", 5000))
-    # debug=False for Render
-    app.run(debug=False, host="0.0.0.0", port=port)
+    app.run(debug=True, host='0.0.0.0', port=5000)

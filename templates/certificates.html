@@ -1,27 +1,181 @@
-{% extends 'base.html' %}
-{% block title %}Certificates{% endblock %}
+{% extends "base.html" %}
+
 {% block content %}
-<h2>Certificates</h2>
-<p><a class="btn btn-secondary" href="{{ url_for('download_all') }}">Download All (ZIP)</a></p>
-<table>
-    <tr>
-        <th>Certificate ID</th>
-        <th>Name</th>
-        <th>Course</th>
-        <th>Issue Date</th>
-        <th>Actions</th>
-    </tr>
-    {% for c in certificates %}
-    <tr>
-        <td>{{ c[0] }}</td>
-        <td>{{ c[1] }}</td>
-        <td>{{ c[2] }}</td>
-        <td>{{ c[3] }}</td>
-        <td>
-            <a class="btn btn-primary" href="{{ url_for('download_certificate', cert_id=c[0]) }}">PDF</a>
-            <a class="btn btn-secondary" href="{{ url_for('download_certificate', cert_id=c[0], style='classic') }}">Classic</a>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+<style>
+    /* Mobile Card View */
+    .cert-card {
+        background: #F9FAFB;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+        border-left: 4px solid #4C51BF;
+    }
+    
+    .cert-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .cert-card-title {
+        font-weight: 600;
+        color: #111827;
+        font-size: 16px;
+        flex: 1;
+    }
+    
+    .cert-badge {
+        background: #4C51BF;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .cert-detail {
+        margin-bottom: 10px;
+    }
+    
+    .cert-label {
+        color: #6B7280;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 3px;
+    }
+    
+    .cert-value {
+        color: #111827;
+        font-size: 14px;
+    }
+    
+    .cert-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #E5E7EB;
+    }
+    
+    .cert-actions .btn {
+        flex: 1;
+        padding: 10px;
+        font-size: 14px;
+    }
+    
+    /* Desktop Table View */
+    .desktop-table {
+        display: none;
+    }
+    
+    .mobile-cards {
+        display: block;
+    }
+    
+    @media (min-width: 768px) {
+        .desktop-table {
+            display: block;
+        }
+        
+        .mobile-cards {
+            display: none;
+        }
+    }
+</style>
+
+<div class="page-header">
+    <h2>All Certificates</h2>
+    <a href="{{ url_for('generate') }}" class="btn btn-primary">+ Generate New</a>
+</div>
+
+{% if certificates %}
+    <!-- Mobile Card View -->
+    <div class="mobile-cards">
+        {% for cert in certificates %}
+        <div class="cert-card">
+            <div class="cert-card-header">
+                <div class="cert-card-title">{{ cert[2] }}</div>
+                <div class="cert-badge">{{ cert[1][:15] }}...</div>
+            </div>
+            
+            <div class="cert-detail">
+                <div class="cert-label">Course Name</div>
+                <div class="cert-value">{{ cert[3] }}</div>
+            </div>
+            
+            <div class="cert-detail">
+                <div class="cert-label">Issue Date</div>
+                <div class="cert-value">{{ cert[4] }}</div>
+            </div>
+            
+            <div class="cert-detail">
+                <div class="cert-label">Generated On</div>
+                <div class="cert-value">{{ cert[5][:10] }}</div>
+            </div>
+            
+            <div class="cert-actions">
+                <a href="{{ url_for('download_certificate', cert_id=cert[1]) }}" 
+                   class="btn btn-primary">
+                    📥 Download
+                </a>
+                <a href="{{ url_for('verify_certificate', cert_id=cert[1]) }}" 
+                   class="btn btn-secondary"
+                   target="_blank">
+                    🔍 Verify
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Desktop Table View -->
+    <div class="desktop-table">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Certificate ID</th>
+                        <th>Recipient Name</th>
+                        <th>Course Name</th>
+                        <th>Issue Date</th>
+                        <th>Generated On</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cert in certificates %}
+                    <tr>
+                        <td><strong style="font-size: 12px;">{{ cert[1] }}</strong></td>
+                        <td>{{ cert[2] }}</td>
+                        <td>{{ cert[3] }}</td>
+                        <td>{{ cert[4] }}</td>
+                        <td>{{ cert[5][:10] }}</td>
+                        <td>
+                            <div style="display: flex; gap: 5px;">
+                                <a href="{{ url_for('download_certificate', cert_id=cert[1]) }}" 
+                                   class="btn btn-primary" style="padding: 5px 15px; font-size: 14px;">
+                                    📥 Download
+                                </a>
+                                <a href="{{ url_for('verify_certificate', cert_id=cert[1]) }}" 
+                                   class="btn btn-secondary" style="padding: 5px 15px; font-size: 14px;"
+                                   target="_blank">
+                                    🔍 Verify
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% else %}
+<div style="text-align: center; padding: 40px 20px; background: #F9FAFB; border-radius: 10px;">
+    <h3 style="color: #6B7280; margin-bottom: 20px; font-size: 18px;">No certificates generated yet</h3>
+    <a href="{{ url_for('generate') }}" class="btn btn-primary">Generate Your First Certificate</a>
+</div>
+{% endif %}
 {% endblock %}
