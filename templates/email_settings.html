@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .settings-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .settings-form {
+        background: #F9FAFB;
+        padding: 25px;
+        border-radius: 10px;
+    }
+    
+    .settings-section {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #E5E7EB;
+    }
+    
+    .settings-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+    
+    .settings-section h3 {
+        color: #4C51BF;
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+    
+    .info-box {
+        background: #EFF6FF;
+        border-left: 4px solid #3B82F6;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    
+    .info-box h4 {
+        color: #1E40AF;
+        font-size: 16px;
+        margin-bottom: 10px;
+    }
+    
+    .info-box p {
+        color: #1E3A8A;
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 8px;
+    }
+    
+    .info-box code {
+        background: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 13px;
+        color: #DC2626;
+    }
+    
+    .variable-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    
+    .variable-tag {
+        background: #DBEAFE;
+        color: #1E40AF;
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-family: monospace;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .variable-tag:hover {
+        background: #3B82F6;
+        color: white;
+    }
+    
+    @media (min-width: 768px) {
+        .settings-form form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .settings-form .form-group.full-width {
+            grid-column: span 2;
+        }
+    }
+</style>
+
+<div class="settings-container">
+    <div class="page-header">
+        <h2>Email Settings</h2>
+    </div>
+    
+    <!-- Gmail Setup Info -->
+    <div class="info-box">
+        <h4>📧 Gmail Setup Instructions</h4>
+        <p><strong>For Gmail users:</strong></p>
+        <p>1. Enable 2-Factor Authentication on your Google account</p>
+        <p>2. Generate an App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color: #2563EB;">Google App Passwords</a></p>
+        <p>3. Use these settings:</p>
+        <p>• SMTP Server: <code>smtp.gmail.com</code></p>
+        <p>• SMTP Port: <code>587</code></p>
+        <p>• Username: Your full Gmail address</p>
+        <p>• Password: Your 16-character App Password (not your regular password)</p>
+    </div>
+    
+    <div class="settings-form">
+        <form method="POST">
+            <!-- SMTP Settings Section -->
+            <div class="settings-section full-width">
+                <h3>🔧 SMTP Server Configuration</h3>
+            </div>
+            
+            <div class="form-group">
+                <label for="smtp_server">SMTP Server *</label>
+                <input type="text" id="smtp_server" name="smtp_server" 
+                       value="{{ settings[1] if settings else 'smtp.gmail.com' }}"
+                       placeholder="smtp.gmail.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="smtp_port">SMTP Port *</label>
+                <input type="number" id="smtp_port" name="smtp_port" 
+                       value="{{ settings[2] if settings else '587' }}"
+                       placeholder="587" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="smtp_username">SMTP Username (Email) *</label>
+                <input type="email" id="smtp_username" name="smtp_username" 
+                       value="{{ settings[3] if settings else '' }}"
+                       placeholder="your-email@gmail.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="smtp_password">SMTP Password / App Password *</label>
+                <input type="password" id="smtp_password" name="smtp_password" 
+                       value="{{ settings[4] if settings else '' }}"
+                       placeholder="Enter app password" required>
+                <p style="font-size: 12px; color: #6B7280; margin-top: 5px;">
+                    For Gmail, use App Password, not your regular password
+                </p>
+            </div>
+            
+            <!-- Email Settings Section -->
+            <div class="settings-section full-width">
+                <h3>✉️ Email Details</h3>
+            </div>
+            
+            <div class="form-group">
+                <label for="from_email">From Email Address *</label>
+                <input type="email" id="from_email" name="from_email" 
+                       value="{{ settings[5] if settings else '' }}"
+                       placeholder="certificates@yourcompany.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="from_name">From Name *</label>
+                <input type="text" id="from_name" name="from_name" 
+                       value="{{ settings[6] if settings else 'Certificate System' }}"
+                       placeholder="Your Organization Name" required>
+            </div>
+            
+            <div class="form-group full-width">
+                <label for="email_subject">Email Subject Line *</label>
+                <input type="text" id="email_subject" name="email_subject" 
+                       value="{{ settings[7] if settings else 'Your Certificate of Completion' }}"
+                       placeholder="Your Certificate of Completion" required>
+                <div class="variable-tags">
+                    <span class="variable-tag" onclick="insertVariable('email_subject', '{name}')">{name}</span>
+                    <span class="variable-tag" onclick="insertVariable('email_subject', '{cert_id}')">{cert_id}</span>
+                </div>
+            </div>
+            
+            <div class="form-group full-width">
+                <label for="email_body">Email Message Body *</label>
+                <textarea id="email_body" name="email_body" 
+                          style="min-height: 200px;" required>{{ settings[8] if settings else 'Dear {name},
+
+Congratulations on completing the course!
+
+Your certificate is attached to this email. Your certificate ID is: {cert_id}
+
+You can verify your certificate at any time by visiting our verification portal.
+
+Best regards,
+Certificate Team' }}</textarea>
+                <p style="font-size: 12px; color: #6B7280; margin-top: 5px;">
+                    Use variables: <code>{name}</code> for recipient name, <code>{cert_id}</code> for certificate ID
+                </p>
+                <div class="variable-tags">
+                    <span class="variable-tag" onclick="insertVariable('email_body', '{name}')">{name}</span>
+                    <span class="variable-tag" onclick="insertVariable('email_body', '{cert_id}')">{cert_id}</span>
+                </div>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="form-group full-width">
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">💾 Save Email Settings</button>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Test Email Section -->
+    <div style="margin-top: 30px; padding: 20px; background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 5px;">
+        <h4 style="color: #92400E; margin-bottom: 10px; font-size: 16px;">⚠️ Important Notes</h4>
+        <ul style="color: #78350F; padding-left: 20px; font-size: 14px; line-height: 1.8;">
+            <li>Always use App Passwords for Gmail (not your regular password)</li>
+            <li>Test email delivery with a single certificate before bulk sending</li>
+            <li>Check your spam folder if emails don't arrive</li>
+            <li>Some email providers have daily sending limits</li>
+            <li>Keep your SMTP credentials secure and don't share them</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    function insertVariable(fieldId, variable) {
+        const field = document.getElementById(fieldId);
+        const start = field.selectionStart;
+        const end = field.selectionEnd;
+        const text = field.value;
+        const before = text.substring(0, start);
+        const after = text.substring(end, text.length);
+        field.value = before + variable + after;
+        field.selectionStart = field.selectionEnd = start + variable.length;
+        field.focus();
+    }
+</script>
+{% endblock %}

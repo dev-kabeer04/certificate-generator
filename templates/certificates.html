@@ -36,6 +36,31 @@
         font-weight: 600;
     }
     
+    .email-status-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .email-sent {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+    
+    .email-not-sent {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+    
+    .no-email {
+        background: #E5E7EB;
+        color: #4B5563;
+    }
+    
     .cert-detail {
         margin-bottom: 10px;
     }
@@ -58,12 +83,14 @@
         margin-top: 15px;
         padding-top: 15px;
         border-top: 1px solid #E5E7EB;
+        flex-wrap: wrap;
     }
     
     .cert-actions .btn {
         flex: 1;
         padding: 10px;
         font-size: 14px;
+        min-width: 120px;
     }
     
     /* Desktop Table View */
@@ -83,6 +110,24 @@
         .mobile-cards {
             display: none;
         }
+        
+        .cert-actions .btn {
+            flex: none;
+        }
+    }
+    
+    .btn-email {
+        background: #10B981;
+        color: white;
+    }
+    
+    .btn-email:hover {
+        background: #059669;
+    }
+    
+    .btn-email:disabled {
+        background: #9CA3AF;
+        cursor: not-allowed;
     }
 </style>
 
@@ -103,17 +148,39 @@
             
             <div class="cert-detail">
                 <div class="cert-label">Course Name</div>
+                <div class="cert-value">{{ cert[4] }}</div>
+            </div>
+            
+            {% if cert[3] %}
+            <div class="cert-detail">
+                <div class="cert-label">Email Address</div>
                 <div class="cert-value">{{ cert[3] }}</div>
             </div>
+            {% endif %}
             
             <div class="cert-detail">
                 <div class="cert-label">Issue Date</div>
-                <div class="cert-value">{{ cert[4] }}</div>
+                <div class="cert-value">{{ cert[5] }}</div>
             </div>
             
             <div class="cert-detail">
                 <div class="cert-label">Generated On</div>
-                <div class="cert-value">{{ cert[5][:10] }}</div>
+                <div class="cert-value">{{ cert[6][:10] }}</div>
+            </div>
+            
+            <div class="cert-detail">
+                <div class="cert-label">Email Status</div>
+                <div>
+                    {% if cert[3] %}
+                        {% if cert[7] %}
+                        <span class="email-status-badge email-sent">✅ Sent</span>
+                        {% else %}
+                        <span class="email-status-badge email-not-sent">❌ Not Sent</span>
+                        {% endif %}
+                    {% else %}
+                    <span class="email-status-badge no-email">➖ No Email</span>
+                    {% endif %}
+                </div>
             </div>
             
             <div class="cert-actions">
@@ -126,6 +193,15 @@
                    target="_blank">
                     🔍 Verify
                 </a>
+                {% if cert[3] %}
+                <form method="POST" action="{{ url_for('send_certificate_email', cert_id=cert[1]) }}" 
+                      style="flex: 1;">
+                    <button type="submit" class="btn btn-email" style="width: 100%;"
+                            {% if cert[7] %}title="Resend email"{% endif %}>
+                        📧 {% if cert[7] %}Resend{% else %}Send{% endif %} Email
+                    </button>
+                </form>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -139,9 +215,10 @@
                     <tr>
                         <th>Certificate ID</th>
                         <th>Recipient Name</th>
+                        <th>Email</th>
                         <th>Course Name</th>
                         <th>Issue Date</th>
-                        <th>Generated On</th>
+                        <th>Email Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -150,11 +227,28 @@
                     <tr>
                         <td><strong style="font-size: 12px;">{{ cert[1] }}</strong></td>
                         <td>{{ cert[2] }}</td>
-                        <td>{{ cert[3] }}</td>
-                        <td>{{ cert[4] }}</td>
-                        <td>{{ cert[5][:10] }}</td>
                         <td>
-                            <div style="display: flex; gap: 5px;">
+                            {% if cert[3] %}
+                            <span style="font-size: 12px;">{{ cert[3] }}</span>
+                            {% else %}
+                            <span style="color: #9CA3AF; font-size: 12px;">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ cert[4] }}</td>
+                        <td>{{ cert[5] }}</td>
+                        <td>
+                            {% if cert[3] %}
+                                {% if cert[7] %}
+                                <span class="email-status-badge email-sent">✅ Sent</span>
+                                {% else %}
+                                <span class="email-status-badge email-not-sent">❌ Not Sent</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="email-status-badge no-email">➖ No Email</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                                 <a href="{{ url_for('download_certificate', cert_id=cert[1]) }}" 
                                    class="btn btn-primary" style="padding: 5px 15px; font-size: 14px;">
                                     📥 Download
@@ -164,6 +258,16 @@
                                    target="_blank">
                                     🔍 Verify
                                 </a>
+                                {% if cert[3] %}
+                                <form method="POST" action="{{ url_for('send_certificate_email', cert_id=cert[1]) }}" 
+                                      style="display: inline;">
+                                    <button type="submit" class="btn btn-email" 
+                                            style="padding: 5px 15px; font-size: 14px;"
+                                            {% if cert[7] %}title="Resend email"{% endif %}>
+                                        📧 {% if cert[7] %}Resend{% else %}Send{% endif %}
+                                    </button>
+                                </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

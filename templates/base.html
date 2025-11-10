@@ -397,6 +397,9 @@
                 <a href="{{ url_for('generate') }}">Generate</a>
                 <a href="{{ url_for('view_certificates') }}">Certificates</a>
                 {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('manage_courses') }}">Courses</a>
+                <a href="{{ url_for('manage_templates') }}">Templates</a>
+                <a href="{{ url_for('email_settings') }}">Email Settings</a>
                 <a href="{{ url_for('manage_users') }}">Users</a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}">Logout ({{ current_user.username }})</a>
