@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Course Results (Percentages){% endblock %}
+
+{% block head %}
+<style>
+  .two-col { display:flex; gap:16px; }
+  .col { flex:1; }
+  .small { font-size:13px; color:#6B7280; }
+  .input-inline { display:flex; gap:8px; align-items:center; }
+  textarea.mono { font-family: monospace; min-height:120px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Course Results (Percentages)</h2>
+</div>
+
+<div style="max-width: 1100px; margin: 0 auto;">
+
+  <!-- Top panel: course selector -->
+  <form id="course-select-form" method="GET" style="margin-bottom:12px;">
+    <label for="course_id">Select Course *</label>
+    <select id="course_id_select" name="course_id" onchange="document.getElementById('course-select-form').submit();">
+      <option value="">-- Select a course --</option>
+      {% for c in courses %}
+        <option value="{{ c.id }}" {% if selected_course_id and c.id == selected_course_id|int %}selected{% endif %}>
+          {{ c.name }} ({{ c.code }})
+        </option>
+      {% endfor %}
+    </select>
+    <p class="small" style="margin-top:6px;">
+      These results are used to automatically select certificate templates based on the learner's percentage.
+    </p>
+  </form>
+
+  <div class="two-col" style="margin-bottom:20px;">
+    <!-- Left: CSV upload -->
+    <div class="col" style="background:#F9FAFB; padding:16px; border-radius:8px;">
+      <h4 style="margin-top:0;">Upload CSV</h4>
+      <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="course_id" value="{{ selected_course_id or '' }}">
+        <input type="file" id="csv_file" name="csv_file" accept=".csv">
+        <p class="small" style="margin-top:8px;">
+          Required columns: <code>name</code> or <code>email</code> (at least one). Optional: <code>percentage</code>, <code>completed</code>.
+        </p>
+        <div style="margin-top:10px;">
+          <button type="submit" class="btn btn-primary">Upload CSV</button>
+        </div>
+      </form>
+
+      <div style="background:#FEF3C7; border-left:4px solid #F59E0B; padding:10px; border-radius:4px; font-size:13px; margin-top:12px;">
+        <strong>Example CSV:</strong><br>
+        name,email,percentage,completed<br>
+        John Doe,john@example.com,78.5,1<br>
+        Jane Smith,jane@example.com,92,yes
+      </div>
+    </div>
+
+    <!-- Right: Manual entry (single & bulk) -->
+    <div class="col" style="background:#F9FAFB; padding:16px; border-radius:8px;">
+      <h4 style="margin-top:0;">Manual Entry</h4>
+
+      <!-- Single row -->
+      <form method="POST" style="margin-bottom:12px;">
+        <input type="hidden" name="course_id" value="{{ selected_course_id or '' }}">
+        <input type="hidden" name="manual_action" value="single">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:180px;">
+            <label>Name</label>
+            <input type="text" name="manual_name" placeholder="John Doe">
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label>Email</label>
+            <input type="email" name="manual_email" placeholder="john@example.com">
+          </div>
+          <div style="width:140px;">
+            <label>Percentage</label>
+            <input type="number" step="0.01" min="0" max="100" name="manual_percentage" placeholder="78.5">
+          </div>
+          <div style="width:120px; display:flex; flex-direction:column; justify-content:flex-end;">
+            <label style="font-weight:600;"><input type="checkbox" name="manual_completed"> Completed</label>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <button type="submit" class="btn btn-primary">Add Result</button>
+        </div>
+      </form>
+
+      <hr style="margin:12px 0; border:none; border-top:1px solid #E5E7EB;">
+
+      <!-- Bulk textarea -->
+      <form method="POST">
+        <input type="hidden" name="course_id" value="{{ selected_course_id or '' }}">
+        <input type="hidden" name="manual_action" value="bulk">
+        <label>Bulk (one per line)</label>
+        <textarea name="manual_bulk" class="mono" placeholder="One per line: name,email,percentage,completed\nOr: name,email"></textarea>
+        <p class="small" style="margin-top:6px;">
+          Example lines:<br>
+          <code>John Doe,john@example.com,78.5,1</code><br>
+          <code>Jane Smith,jane@example.com,92,yes</code><br>
+          <code>Ali Khan,ali@example.com</code>
+        </p>
+        <div style="margin-top:10px;">
+          <button type="submit" class="btn btn-primary">Add Bulk Results</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- How used -->
+  <div style="background:#EFF6FF; border-left:4px solid #3B82F6; padding:12px; border-radius:6px; margin-bottom:12px;">
+    <strong>How this is used:</strong>
+    <span class="small">When generating certificates for a course the system looks up the latest result for each recipient (matching by email first, then name) and maps percentage to a template. If no result is found the Generate page template is used as fallback.</span>
+  </div>
+
+  <!-- Results table -->
+  {% if selected_course_id and results %}
+    <h3 style="font-size:18px; margin-bottom:10px;">Results for selected course</h3>
+    <div style="overflow-x:auto;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Student Name</th>
+            <th>Email</th>
+            <th>Percentage</th>
+            <th>Completed</th>
+            <th>Created At</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr>
+            <td>{{ r.id }}</td>
+            <td>{{ r.name or '-' }}</td>
+            <td>{{ r.email or '-' }}</td>
+            <td>{% if r.percentage is not none %}{{ '%.2f'|format(r.percentage) }}%{% else %}-{% endif %}</td>
+            <td>{% if r.completed %}<span style="color:#15803D; font-weight:600;">Yes</span>{% else %}<span style="color:#B91C1C;">No</span>{% endif %}</td>
+            <td>{{ r.created_at }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elif selected_course_id %}
+    <p class="small">No results found yet for this course. Use CSV upload or manual entry to add percentages.</p>
+  {% else %}
+    <p class="small">Select a course to manage results.</p>
+  {% endif %}
+</div>
+{% endblock %}

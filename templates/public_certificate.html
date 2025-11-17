@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ cert.recipient_name }} - Certificate</title>
+    <meta property="og:title" content="{{ cert.recipient_name }} - Certificate">
+    <meta property="og:description" content="Certificate for {{ cert.course_name }} issued on {{ cert.issue_date }}">
+    <meta property="og:image" content="{{ url_for('static', filename='certificates/{{ cert.certificate_image }}', _external=True) }}">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:type" content="website">
+</head>
+
+<body>
+    <h1>Certificate of Completion</h1>
+    <p>Name: {{ certificate.name }}</p>
+    <p>Course: {{ certificate.course_name }}</p>
+    <p>Date: {{ certificate.issue_date }}</p>
+</body>
+</html>

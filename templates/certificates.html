@@ -86,13 +86,6 @@
         flex-wrap: wrap;
     }
     
-    .cert-actions .btn {
-        flex: 1;
-        padding: 10px;
-        font-size: 14px;
-        min-width: 120px;
-    }
-    
     /* Desktop Table View */
     .desktop-table {
         display: none;
@@ -128,6 +121,15 @@
     .btn-email:disabled {
         background: #9CA3AF;
         cursor: not-allowed;
+    }
+
+    .btn-info {
+        background: #0A66C2;
+        color: white;
+    }
+
+    .btn-info:hover {
+        background: #004182;
     }
 </style>
 
@@ -202,6 +204,11 @@
                     </button>
                 </form>
                 {% endif %}
+                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ url_for('public_certificate', cert_id=cert[1], _external=True) }}" 
+   target="_blank" 
+   class="btn btn-linkedin">
+   🔗 Share on LinkedIn
+</a>
             </div>
         </div>
         {% endfor %}
@@ -268,6 +275,10 @@
                                     </button>
                                 </form>
                                 {% endif %}
+                                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ url_for('public_certificate', cert_id=cert[1], _external=True) }}"
+                                   target="_blank" class="btn btn-info" style="padding: 5px 15px; font-size: 14px;">
+                                    🔗 LinkedIn
+                                </a>
                             </div>
                         </td>
                     </tr>

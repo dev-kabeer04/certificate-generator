@@ -22,7 +22,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 import threading
 import re
-import uuid  # NEW
+import uuid
+from utils.template_selector import pick_template
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'
@@ -56,7 +57,53 @@ login_manager.login_view = 'login'
 def allowed_file(filename, allowed_set):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
 
+# ---------- TEMPLATE MAPPING (PERCENTAGE -> TEMPLATE) ----------
+
+# Change these IDs to match your real template IDs in the "templates" table.
+# Example:
+# 50–60  → template id 2
+# 60–70  → template id 3
+# 70–80  → template id 4
+# 80–90  → template id 5
+# 90–100 → template id 6
+TEMPLATE_ID_50_60  = 2
+TEMPLATE_ID_60_70  = 3
+TEMPLATE_ID_70_80  = 4
+TEMPLATE_ID_80_90  = 5
+TEMPLATE_ID_90_100 = 6
+
+# Fallback template if no percentage / out of range / no record
+DEFAULT_TEMPLATE_ID = 1
+
+def get_template_for_percentage(pct):
+    """
+    Given a percentage (0–100), return a template_id.
+    Adjust the ranges and IDs above to whatever you want.
+    """
+    if pct is None:
+        return DEFAULT_TEMPLATE_ID
+
+    try:
+        pct = float(pct)
+    except (ValueError, TypeError):
+        return DEFAULT_TEMPLATE_ID
+
+    if 50 <= pct < 60:
+        return TEMPLATE_ID_50_60
+    elif 60 <= pct < 70:
+        return TEMPLATE_ID_60_70
+    elif 70 <= pct < 80:
+        return TEMPLATE_ID_70_80
+    elif 80 <= pct < 90:
+        return TEMPLATE_ID_80_90
+    elif 90 <= pct <= 100:
+        return TEMPLATE_ID_90_100
+    else:
+        # < 50 or > 100 or anything weird
+        return DEFAULT_TEMPLATE_ID
+
 # ---------- DB bootstrap ----------
+
 def init_db():
     conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
@@ -134,6 +181,17 @@ def init_db():
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                   updated_at TIMESTAMP)''')
 
+    # NEW: course_results – stores percentage for each learner per course
+    c.execute('''CREATE TABLE IF NOT EXISTS course_results
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  course_id INTEGER NOT NULL,
+                  name TEXT,
+                  email TEXT,
+                  percentage REAL,
+                  completed INTEGER DEFAULT 1,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (course_id) REFERENCES courses(id))''')
+
     # helper migration funcs
     def col_exists(table, col):
         c.execute(f"PRAGMA table_info({table})")
@@ -184,6 +242,7 @@ def init_db():
     conn.close()
 
 # ---------- helpers ----------
+
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
@@ -359,6 +418,7 @@ def send_email_with_certificate(recipient_email, recipient_name, cert_id, pdf_bu
         return False, str(e)
 
 # ---------- Auth ----------
+
 class User(UserMixin):
     def __init__(self, id, username, role):
         self.id = id
@@ -377,6 +437,7 @@ def load_user(user_id):
     return None
 
 # ---------- Routes ----------
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -432,12 +493,19 @@ def dashboard():
 @app.route('/generate', methods=['GET', 'POST'])
 @login_required
 def generate():
+    try:
+        from utils.template_selector import pick_template
+    except Exception:
+        def pick_template(pct):
+            return None
+
     if request.method == 'POST':
         course_id = request.form.get('course_id')
         course_name = request.form.get('course_name', '').strip()
-        issue_date = request.form['issue_date']
-        template_id = request.form.get('template_id', 1)
+        issue_date = request.form.get('issue_date')
+        base_template_id = int(request.form.get('template_id', DEFAULT_TEMPLATE_ID))
         send_emails = request.form.get('send_emails') == 'on'
+        auto_template_is_on = request.form.get('auto_template') == 'on'
 
         # Backfill course_name from DB if missing
         if not course_name and course_id:
@@ -449,7 +517,7 @@ def generate():
             if row:
                 course_name = row[0]
 
-        # If email sending requested, ensure settings exist up front
+        # Check email settings if sending emails
         if send_emails:
             _conn = sqlite3.connect('certificates.db')
             _c = _conn.cursor()
@@ -457,19 +525,16 @@ def generate():
                           FROM email_settings WHERE id = 1""")
             s = _c.fetchone()
             _conn.close()
-            email_settings_ok = bool(s and all(s[:4]) and s[4])
-            if not email_settings_ok:
+            if not (s and all(s[:4]) and s[4]):
                 flash('Email sending is enabled, but email settings are not configured. Configure them first.', 'error')
                 return redirect(url_for('email_settings'))
 
+        # Build recipients list
         recipients = []
-
-        # Prefer CSV if uploaded
         if 'csv_file' in request.files and request.files['csv_file'].filename:
             csv_file = request.files['csv_file']
             if csv_file and allowed_file(csv_file.filename, ALLOWED_CSV):
                 try:
-                    # utf-8-sig handles BOM from Excel exports
                     stream = io.StringIO(csv_file.stream.read().decode("utf-8-sig"), newline=None)
                     csv_reader = csv.DictReader(stream)
                     for row in csv_reader:
@@ -484,7 +549,6 @@ def generate():
                 flash('Invalid CSV file', 'error')
                 return redirect(url_for('generate'))
         else:
-            # Manual textarea
             names_input = request.form.get('names', '')
             recipients = [r for r in parse_manual_recipients(names_input) if r['name']]
 
@@ -499,71 +563,106 @@ def generate():
         email_count = 0
         skipped = []
 
+        # Helper: look up percentage for this recipient
+        def lookup_percentage_for_recipient(name, email, course_id_val):
+            if not course_id_val:
+                return None
+            if email:
+                c.execute("""SELECT percentage FROM course_results
+                             WHERE course_id = ? AND email = ?
+                             ORDER BY created_at DESC LIMIT 1""",
+                          (course_id_val, email))
+                row = c.fetchone()
+                if row and row[0] is not None:
+                    return row[0]
+            if name:
+                c.execute("""SELECT percentage FROM course_results
+                             WHERE course_id = ? AND name = ?
+                             ORDER BY created_at DESC LIMIT 1""",
+                          (course_id_val, name))
+                row = c.fetchone()
+                if row and row[0] is not None:
+                    return row[0]
+            return None
+
+        # Main loop
         for recipient in recipients:
-            # Try up to 3 times in the rare case of UUID collision
+            recipient_name = recipient['name']
+            recipient_email = recipient.get('email')
+
+            # Choose template based on percentage if auto_template_on
+            if course_id and auto_template_is_on:
+                pct = lookup_percentage_for_recipient(recipient_name, recipient_email, course_id)
+                template_id_to_use = base_template_id
+                if pct is not None:
+                    try:
+                        picked = pick_template(pct)
+                        if picked:
+                            template_id_to_use = int(picked)
+                    except Exception as e:
+                        print(f"[template select] pick_template error: {e}")
+                        template_id_to_use = base_template_id
+            else:
+                template_id_to_use = base_template_id
+
+            # Insert certificate record
             attempts = 0
             inserted = False
             last_error = None
-
+            cert_id = None
             while attempts < 3 and not inserted:
                 cert_id = make_cert_id()
                 try:
                     c.execute('''INSERT INTO certificates 
-                                (certificate_id, name, email, course_id, course_name, issue_date, template_id, created_by)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                              (cert_id,
-                               recipient['name'],
-                               recipient.get('email'),
-                               course_id if course_id else None,
-                               course_name,
-                               issue_date,
-                               template_id,
-                               current_user.id))
+                                 (certificate_id, name, email, course_id, course_name, issue_date, template_id, created_by)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                              (cert_id, recipient_name, recipient_email, course_id, course_name, issue_date,
+                               template_id_to_use, current_user.id))
                     generated_count += 1
                     inserted = True
                 except sqlite3.IntegrityError as e:
-                    # Likely duplicate certificate_id — try again
                     attempts += 1
                     last_error = e
-
             if not inserted:
-                skipped.append((recipient['name'], f'Insert failed: {last_error}'))
+                skipped.append((recipient_name, f'Insert failed: {last_error}'))
                 continue
 
-            # If emailing requested and we have email, render PDF and send
-            if send_emails and recipient.get('email'):
-                c.execute('''SELECT c.certificate_id, c.name, c.course_name, c.issue_date, 
-                                    t.title_text, t.border_color, t.title_color, t.bg_color, 
-                                    t.logo_path, t.signature_path, t.signature_name
-                             FROM certificates c
-                             LEFT JOIN templates t ON c.template_id = t.id
-                             WHERE c.certificate_id = ?''', (cert_id,))
-                row = c.fetchone()
-                if row:
-                    cert_data = {
-                        'certificate_id': row[0],
-                        'name': row[1],
-                        'course_name': row[2],
-                        'issue_date': row[3],
-                        'title_text': row[4],
-                        'border_color': row[5],
-                        'title_color': row[6],
-                        'bg_color': row[7],
-                        'logo_path': row[8],
-                        'signature_path': row[9],
-                        'signature_name': row[10]
-                    }
-                    pdf_buffer = generate_certificate_pdf(cert_data)
-                    success, message = send_email_with_certificate(
-                        recipient['email'], recipient['name'], cert_id, pdf_buffer
-                    )
-                    if success:
-                        c.execute('''UPDATE certificates 
-                                     SET email_sent = 1, email_sent_at = CURRENT_TIMESTAMP 
-                                     WHERE certificate_id = ?''', (cert_id,))
-                        email_count += 1
-                    else:
-                        flash(f'Email failed for {recipient["name"]}: {message}', 'error')
+            # Email certificate
+            if send_emails and recipient_email:
+                try:
+                    c.execute('''SELECT c.certificate_id, c.name, c.course_name, c.issue_date,
+                                        t.title_text, t.border_color, t.title_color, t.bg_color,
+                                        t.logo_path, t.signature_path, t.signature_name
+                                 FROM certificates c
+                                 LEFT JOIN templates t ON c.template_id = t.id
+                                 WHERE c.certificate_id = ?''', (cert_id,))
+                    row = c.fetchone()
+                    if row:
+                        cert_data = {
+                            'certificate_id': row[0],
+                            'name': row[1],
+                            'course_name': row[2],
+                            'issue_date': row[3],
+                            'title_text': row[4],
+                            'border_color': row[5],
+                            'title_color': row[6],
+                            'bg_color': row[7],
+                            'logo_path': row[8],
+                            'signature_path': row[9],
+                            'signature_name': row[10]
+                        }
+                        pdf_buffer = generate_certificate_pdf(cert_data)
+                        success, message = send_email_with_certificate(recipient_email, recipient_name, cert_id, pdf_buffer)
+                        if success:
+                            c.execute('''UPDATE certificates
+                                         SET email_sent = 1, email_sent_at = CURRENT_TIMESTAMP
+                                         WHERE certificate_id = ?''', (cert_id,))
+                            email_count += 1
+                        else:
+                            flash(f'Email failed for {recipient_name}: {message}', 'error')
+                except Exception as e:
+                    print(f"[email] error for {recipient_email}: {e}")
+                    flash(f'Email failed for {recipient_name}: {e}', 'error')
 
         conn.commit()
         conn.close()
@@ -577,6 +676,18 @@ def generate():
             msg += f' | Skipped: {len(skipped)} (e.g., {preview}{more})'
         flash(msg, 'success')
         return redirect(url_for('view_certificates'))
+
+
+    # ---------- GET: lists for dropdowns ----------
+    conn = sqlite3.connect('certificates.db')
+    c = conn.cursor()
+    c.execute("SELECT id, course_name, course_code FROM courses ORDER BY course_name")
+    courses = [{'id': r[0], 'name': r[1], 'code': r[2]} for r in c.fetchall()]
+    c.execute("SELECT id, template_name FROM templates ORDER BY is_default DESC, template_name")
+    templates = [{'id': r[0], 'name': r[1]} for r in c.fetchall()]
+    conn.close()
+
+    return render_template('generate.html', courses=courses, templates=templates)
 
     # ---------- GET: lists for dropdowns ----------
     conn = sqlite3.connect('certificates.db')
@@ -609,6 +720,26 @@ def view_certificates():
     conn.close()
 
     return render_template('certificates.html', certificates=certificates)
+
+@app.route('/certificate/<cert_id>')
+def public_certificate(cert_id):
+    conn = sqlite3.connect('certificates.db')
+    c = conn.cursor()
+    c.execute('''SELECT name, course_name, issue_date FROM certificates WHERE certificate_id = ?''', (cert_id,))
+    cert = c.fetchone()
+    conn.close()
+
+    if not cert:
+        flash('Certificate not found', 'error')
+        return redirect(url_for('index'))
+
+    return render_template('public_certificate.html', certificate={
+        'id': cert_id,
+        'name': cert[0],
+        'course_name': cert[1],
+        'issue_date': cert[2]
+    })
+
 
 @app.route('/send_email/<cert_id>', methods=['POST'])
 @login_required
@@ -781,6 +912,205 @@ def manage_courses():
 
     return render_template('courses.html', courses=courses)
 
+# ----------------------------
+# Course Results (percentages)
+# ----------------------------
+# ----------------------------
+# Course Results (percentages)
+# ----------------------------
+@app.route('/course-results', methods=['GET', 'POST'])
+@login_required
+def manage_course_results():
+    # Only admin can manage scores
+    if current_user.role != 'admin':
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+
+    conn = sqlite3.connect('certificates.db')
+    c = conn.cursor()
+
+    # Load courses for dropdown
+    c.execute("SELECT id, course_name, course_code FROM courses ORDER BY course_name")
+    courses = [{'id': r[0], 'name': r[1], 'code': r[2]} for r in c.fetchall()]
+
+    selected_course_id = request.args.get('course_id') or request.form.get('course_id')
+
+    if request.method == 'POST':
+        course_id = request.form.get('course_id')
+        if not course_id:
+            flash('Please select a course before submitting results.', 'error')
+            conn.close()
+            return redirect(url_for('manage_course_results'))
+
+        course_id = int(course_id)
+
+        # --- CSV Upload path ---
+        if 'csv_file' in request.files and request.files['csv_file'].filename:
+            csv_file = request.files['csv_file']
+            if csv_file and allowed_file(csv_file.filename, ALLOWED_CSV):
+                try:
+                    stream = io.StringIO(csv_file.stream.read().decode("utf-8-sig"), newline=None)
+                    reader = csv.DictReader(stream)
+
+                    inserted = 0
+                    for row in reader:
+                        name = (row.get('name') or '').strip()
+                        email = (row.get('email') or '').strip()
+                        pct_raw = (row.get('percentage') or '').strip()
+                        completed_raw = (row.get('completed') or '').strip().lower()
+
+                        if not name and not email:
+                            continue  # skip empty rows
+
+                        try:
+                            percentage = float(pct_raw) if pct_raw != '' else None
+                        except ValueError:
+                            percentage = None
+
+                        # completed column: treat "0", "false", "no" as 0, else 1
+                        completed = 1
+                        if completed_raw in ('0', 'false', 'no', 'n', ''):
+                            completed = 0 if completed_raw in ('0', 'false', 'no', 'n') else 1
+
+                        c.execute(
+                            '''INSERT INTO course_results (course_id, name, email, percentage, completed)
+                               VALUES (?, ?, ?, ?, ?)''',
+                            (course_id, name or None, email or None, percentage, completed)
+                        )
+                        inserted += 1
+
+                    conn.commit()
+                    flash(f'Imported {inserted} result(s) for the selected course.', 'success')
+                    conn.close()
+                    return redirect(url_for('manage_course_results', course_id=course_id))
+
+                except Exception as e:
+                    conn.rollback()
+                    conn.close()
+                    flash(f'Error reading CSV: {e}', 'error')
+                    return redirect(url_for('manage_course_results'))
+            else:
+                conn.close()
+                flash('Invalid CSV file.', 'error')
+                return redirect(url_for('manage_course_results'))
+
+        # --- Manual single-entry form (name,email,percentage,completed checkbox) ---
+        if request.form.get('manual_action') == 'single':
+            name = (request.form.get('manual_name') or '').strip()
+            email = (request.form.get('manual_email') or '').strip()
+            pct_raw = (request.form.get('manual_percentage') or '').strip()
+            completed_checked = request.form.get('manual_completed') == 'on'
+
+            if not name and not email:
+                flash('Provide at least a name or an email for manual entry.', 'error')
+                conn.close()
+                return redirect(url_for('manage_course_results', course_id=course_id))
+
+            try:
+                percentage = float(pct_raw) if pct_raw != '' else None
+            except ValueError:
+                percentage = None
+
+            completed = 1 if completed_checked else 0
+
+            try:
+                c.execute(
+                    '''INSERT INTO course_results (course_id, name, email, percentage, completed)
+                       VALUES (?, ?, ?, ?, ?)''',
+                    (course_id, name or None, email or None, percentage, completed)
+                )
+                conn.commit()
+                flash('Result saved.', 'success')
+            except Exception as e:
+                conn.rollback()
+                flash(f'Failed to save result: {e}', 'error')
+
+            conn.close()
+            return redirect(url_for('manage_course_results', course_id=course_id))
+
+        # --- Manual bulk textarea (one per line, CSV-like) ---
+        if request.form.get('manual_action') == 'bulk':
+            bulk_text = request.form.get('manual_bulk', '')
+            lines = [ln.strip() for ln in bulk_text.splitlines() if ln.strip()]
+            inserted = 0
+            for line in lines:
+                # Accept formats:
+                # name,email,percentage,completed
+                # name,email
+                parts = [p.strip() for p in re.split(r',\s*', line)]
+                name = parts[0] if len(parts) > 0 else ''
+                email = parts[1] if len(parts) > 1 else ''
+                pct_raw = parts[2] if len(parts) > 2 else ''
+                completed_raw = parts[3] if len(parts) > 3 else ''
+
+                if not name and not email:
+                    continue
+
+                try:
+                    percentage = float(pct_raw) if pct_raw != '' else None
+                except ValueError:
+                    percentage = None
+
+                completed = 1
+                if str(completed_raw).strip().lower() in ('0', 'false', 'no', 'n'):
+                    completed = 0
+
+                try:
+                    c.execute(
+                        '''INSERT INTO course_results (course_id, name, email, percentage, completed)
+                           VALUES (?, ?, ?, ?, ?)''',
+                        (course_id, name or None, email or None, percentage, completed)
+                    )
+                    inserted += 1
+                except Exception:
+                    # skip problematic row but continue
+                    continue
+
+            conn.commit()
+            flash(f'Imported {inserted} manual result(s).', 'success')
+            conn.close()
+            return redirect(url_for('manage_course_results', course_id=course_id))
+
+        # If none matched, just close and redirect
+        conn.close()
+        flash('No action performed.', 'warning')
+        return redirect(url_for('manage_course_results'))
+
+    # GET (or after redirect) – show results for selected course, if any
+    results = []
+    if selected_course_id:
+        try:
+            cid = int(selected_course_id)
+            c.execute(
+                '''SELECT id, name, email, percentage, completed, created_at
+                   FROM course_results
+                   WHERE course_id = ?
+                   ORDER BY created_at DESC''',
+                (cid,)
+            )
+            rows = c.fetchall()
+            for r in rows:
+                results.append({
+                    'id': r[0],
+                    'name': r[1],
+                    'email': r[2],
+                    'percentage': r[3],
+                    'completed': bool(r[4]),
+                    'created_at': r[5]
+                })
+        except ValueError:
+            pass
+
+    conn.close()
+
+    return render_template(
+        'course_results.html',
+        courses=courses,
+        selected_course_id=selected_course_id,
+        results=results
+    )
+
+
 @app.route('/add_course', methods=['POST'])
 @login_required
 def add_course():
@@ -850,34 +1180,51 @@ def manage_templates():
 
     conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-    c.execute('''SELECT t.id, t.template_name, t.title_text, t.border_color, 
-                 t.title_color, t.bg_color, t.logo_path, t.signature_path, 
-                 t.signature_name, t.is_default, t.created_at, u.username
-                 FROM templates t
-                 LEFT JOIN users u ON t.created_by = u.id
-                 ORDER BY t.is_default DESC, t.created_at DESC''')
+
+    # Fetch templates
+    c.execute('''
+        SELECT t.id, t.template_name, t.title_text, t.border_color, 
+               t.title_color, t.bg_color, t.logo_path, t.signature_path, 
+               t.signature_name, t.is_default, t.created_at, u.username
+        FROM templates t
+        LEFT JOIN users u ON t.created_by = u.id
+        ORDER BY t.is_default DESC, t.created_at DESC
+    ''')
     templates = c.fetchall()
+
+    # Fetch grades for dropdown
+    c.execute('SELECT id, name FROM grades ORDER BY name')
+    grades = c.fetchall()
+
     conn.close()
 
-    return render_template('templates.html', templates=templates)
+    return render_template('templates.html', templates=templates, grades=grades)
+
 
 @app.route('/add_template', methods=['POST'])
 @login_required
 def add_template():
     if current_user.role != 'admin':
-        return jsonify({'error': 'Access denied'}), 403
+        flash('Access denied', 'error')
+        return redirect(url_for('manage_templates'))
 
+    # Get form data
     template_name = request.form['template_name']
     title_text = request.form['title_text']
     border_color = request.form['border_color']
     title_color = request.form['title_color']
     bg_color = request.form['bg_color']
     signature_name = request.form.get('signature_name', 'Authorized Signature')
+    grade_id = request.form.get('grade')  # dropdown value
+    min_percent = request.form.get('min_percent')
+    max_percent = request.form.get('max_percent')
 
+    # Convert percentage values to integers if provided
+    min_percent = int(min_percent) if min_percent else None
+    max_percent = int(max_percent) if max_percent else None
+
+    # Handle logo upload
     logo_path = None
-    signature_path = None
-
-    # Logo upload
     if 'logo' in request.files:
         logo = request.files['logo']
         if logo and logo.filename and allowed_file(logo.filename, ALLOWED_EXTENSIONS):
@@ -885,7 +1232,8 @@ def add_template():
             logo_path = os.path.join(app.config['UPLOAD_FOLDER'], 'logos', filename)
             logo.save(logo_path)
 
-    # Signature upload
+    # Handle signature upload
+    signature_path = None
     if 'signature' in request.files:
         signature = request.files['signature']
         if signature and signature.filename and allowed_file(signature.filename, ALLOWED_EXTENSIONS):
@@ -893,23 +1241,30 @@ def add_template():
             signature_path = os.path.join(app.config['UPLOAD_FOLDER'], 'signatures', filename)
             signature.save(signature_path)
 
+    # Insert into database
     conn = sqlite3.connect('certificates.db')
     c = conn.cursor()
-
     try:
-        c.execute('''INSERT INTO templates 
-                     (template_name, title_text, border_color, title_color, bg_color, 
-                      logo_path, signature_path, signature_name, created_by)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                  (template_name, title_text, border_color, title_color, bg_color,
-                   logo_path, signature_path, signature_name, current_user.id))
+        c.execute('''
+            INSERT INTO templates 
+            (template_name, title_text, border_color, title_color, bg_color, 
+             logo_path, signature_path, signature_name, grade_id, min_percent, max_percent, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            template_name, title_text, border_color, title_color, bg_color,
+            logo_path, signature_path, signature_name, grade_id, min_percent, max_percent,
+            current_user.id
+        ))
         conn.commit()
         flash(f'Template "{template_name}" created successfully!', 'success')
     except sqlite3.IntegrityError:
         flash('Template name already exists', 'error')
+    finally:
+        conn.close()
 
-    conn.close()
     return redirect(url_for('manage_templates'))
+
+
 
 @app.route('/delete_template/<int:template_id>', methods=['POST'])
 @login_required

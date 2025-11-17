@@ -4,22 +4,22 @@
 
 {% block head %}
 <style>
-  .upload-method-tabs { display:flex; gap:10px; margin-bottom:20px; border-bottom:2px solid #E5E7EB; }
-  .tab-button { padding:12px 24px; background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; font-size:16px; font-weight:500; color:#6B7280; transition:all .3s; }
-  .tab-button.active { color:#4C51BF; border-bottom-color:#4C51BF; }
-  .tab-button:hover { color:#4C51BF; }
-  .tab-content { display:none; }
-  .tab-content.active { display:block; }
-  .csv-template-info { background:#FEF3C7; border-left:4px solid #F59E0B; padding:15px; border-radius:5px; margin-bottom:20px; }
-  .csv-template-info h4 { color:#92400E; margin-bottom:10px; font-size:16px; }
-  .csv-template-info p { color:#78350F; font-size:14px; margin-bottom:8px; }
-  .csv-example { background:white; padding:10px; border-radius:5px; font-family:monospace; font-size:13px; color:#1F2937; margin-top:10px; }
-  .download-template-btn { display:inline-block; margin-top:10px; padding:8px 16px; background:#F59E0B; color:white; text-decoration:none; border-radius:5px; font-size:14px; transition:background .3s; }
-  .download-template-btn:hover { background:#D97706; }
-  .email-option { background:#EFF6FF; border:2px solid #DBEAFE; padding:15px; border-radius:8px; margin-top:20px; }
-  .email-option label { display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; color:#1E40AF; }
-  .email-option input[type="checkbox"] { width:20px; height:20px; cursor:pointer; }
-  .email-warning { background:#FEF2F2; border-left:4px solid #EF4444; padding:12px; border-radius:5px; margin-top:10px; font-size:13px; color:#991B1B; }
+.upload-method-tabs { display:flex; gap:10px; margin-bottom:20px; border-bottom:2px solid #E5E7EB; }
+.tab-button { padding:12px 24px; background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; font-size:16px; font-weight:500; color:#6B7280; transition:all .3s; }
+.tab-button.active { color:#4C51BF; border-bottom-color:#4C51BF; }
+.tab-button:hover { color:#4C51BF; }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+.csv-template-info { background:#FEF3C7; border-left:4px solid #F59E0B; padding:15px; border-radius:5px; margin-bottom:20px; }
+.csv-template-info h4 { color:#92400E; margin-bottom:10px; font-size:16px; }
+.csv-template-info p { color:#78350F; font-size:14px; margin-bottom:8px; }
+.csv-example { background:white; padding:10px; border-radius:5px; font-family:monospace; font-size:13px; color:#1F2937; margin-top:10px; }
+.download-template-btn { display:inline-block; margin-top:10px; padding:8px 16px; background:#F59E0B; color:white; text-decoration:none; border-radius:5px; font-size:14px; transition:background .3s; }
+.download-template-btn:hover { background:#D97706; }
+.email-option, .auto-template-option { background:#EFF6FF; border:2px solid #DBEAFE; padding:15px; border-radius:8px; margin-top:20px; }
+.email-option label, .auto-template-option label { display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; color:#1E40AF; }
+.email-option input[type="checkbox"], .auto-template-option input[type="checkbox"] { width:20px; height:20px; cursor:pointer; }
+.email-warning { background:#FEF2F2; border-left:4px solid #EF4444; padding:12px; border-radius:5px; margin-top:10px; font-size:13px; color:#991B1B; }
 </style>
 {% endblock %}
 
@@ -30,6 +30,7 @@
 
 <div style="max-width: 900px; margin: 0 auto;">
   <form method="POST" enctype="multipart/form-data" style="background:#F9FAFB; padding:20px; border-radius:10px;">
+    
     <!-- Course Selection -->
     <div class="form-group">
       <label for="course_id">Select Course *</label>
@@ -40,8 +41,7 @@
         {% endfor %}
       </select>
       <p style="font-size:12px; color:#6B7280; margin-top:5px;">
-        Don’t see your course?
-        <a href="{{ url_for('manage_courses') }}" style="color:#4C51BF;">Add it here</a>
+        Don’t see your course? <a href="{{ url_for('manage_courses') }}" style="color:#4C51BF;">Add it here</a>
       </p>
     </div>
 
@@ -57,8 +57,18 @@
         {% endfor %}
       </select>
       <p style="font-size:12px; color:#6B7280; margin-top:5px;">
-        Want a custom design?
-        <a href="{{ url_for('manage_templates') }}" style="color:#4C51BF;">Create template here</a>
+        Want a custom design? <a href="{{ url_for('manage_templates') }}" style="color:#4C51BF;">Create template here</a>
+      </p>
+    </div>
+
+    <!-- Auto Template -->
+    <div class="auto-template-option">
+      <label>
+        <input type="checkbox" id="auto_template" name="auto_template">
+        🎨 Auto-select template based on percentage (if applicable)
+      </label>
+      <p style="font-size:13px; color:#1E40AF; margin:10px 0 0 30px;">
+        The system will choose the best template automatically based on the recipient’s course result percentage.
       </p>
     </div>
 
@@ -78,15 +88,13 @@
 
       <!-- Manual Entry Tab -->
       <div id="manual-tab" class="tab-content active">
-        <textarea id="names" name="names"
-          placeholder="One per line. Examples:
+        <textarea id="names" name="names" placeholder="One per line. Examples:
 John Doe
 Jane Smith,jane@example.com
-Bob Brown <bob@school.edu>"
-          style="min-height:150px;"></textarea>
+Bob Brown <bob@school.edu>" style="min-height:150px;"></textarea>
         <p style="font-size:14px; color:#6B7280; margin-top:5px;">
-          You can include emails inline using <code>Name,email</code> or <code>Name &lt;email&gt;</code>.
-          Check “Send certificates via email automatically” to email those entries.
+          Include emails inline using <code>Name,email</code> or <code>Name &lt;email&gt;</code>. 
+          Check “Send certificates via email automatically” to email these entries.
         </p>
       </div>
 
@@ -94,40 +102,34 @@ Bob Brown <bob@school.edu>"
       <div id="csv-tab" class="tab-content">
         <div class="csv-template-info">
           <h4>📋 CSV Format Requirements</h4>
-          <p><strong>Required columns:</strong> name</p>
-          <p><strong>Optional columns:</strong> email (needed for email distribution)</p>
+          <p><strong>Required:</strong> name</p>
+          <p><strong>Optional:</strong> email (needed for email sending)</p>
           <div class="csv-example">
             <strong>Example CSV:</strong><br>
             name,email<br>
             John Doe,john@example.com<br>
-            Jane Smith,jane@example.com<br>
-            Robert Johnson,robert@example.com
+            Jane Smith,jane@example.com
           </div>
           <a href="data:text/csv;charset=utf-8,name,email%0AJohn Doe,john@example.com%0AJane Smith,jane@example.com"
              download="certificate_template.csv"
              class="download-template-btn">⬇️ Download CSV Template</a>
         </div>
         <input type="file" id="csv_file" name="csv_file" accept=".csv">
-        <p style="font-size:14px; color:#6B7280; margin-top:5px;">
-          Upload a CSV file with recipient names and email addresses.
-        </p>
       </div>
     </div>
 
-    <!-- Email Distribution Option -->
+    <!-- Email Option -->
     <div class="email-option">
       <label>
         <input type="checkbox" id="send_emails" name="send_emails">
         📧 Send certificates via email automatically
       </label>
       <p style="font-size:13px; color:#1E40AF; margin:10px 0 0 30px;">
-        Certificates will be emailed to recipients if email addresses are provided.
+        Certificates will be emailed if email addresses are provided.
       </p>
       <div class="email-warning" id="email-warning" style="display:none; margin-left:30px;">
         ⚠️ Email settings must be configured first.
-        <a href="{{ url_for('email_settings') }}" style="color:#DC2626; text-decoration:underline;">
-          Configure email settings
-        </a>
+        <a href="{{ url_for('email_settings') }}" style="color:#DC2626; text-decoration:underline;">Configure email settings</a>
       </div>
     </div>
 
@@ -142,8 +144,8 @@ Bob Brown <bob@school.edu>"
   <div style="margin-top:30px; padding:20px; background:#EFF6FF; border-left:4px solid #3B82F6; border-radius:5px;">
     <h4 style="color:#1E40AF; margin-bottom:10px; font-size:16px;">💡 Tips</h4>
     <ul style="color:#1E3A8A; padding-left:20px; font-size:14px; line-height:1.8;">
-      <li><strong>Manual Entry:</strong> quick for small batches; supports inline emails.</li>
-      <li><strong>CSV Upload:</strong> best for large batches with emails.</li>
+      <li><strong>Manual Entry:</strong> best for small batches; supports inline emails.</li>
+      <li><strong>CSV Upload:</strong> ideal for large batches with emails.</li>
       <li><strong>Email Distribution:</strong> auto-sends certificates to recipients.</li>
       <li>Each certificate has a unique ID and QR code for verification.</li>
     </ul>
@@ -153,85 +155,31 @@ Bob Brown <bob@school.edu>"
 
 {% block scripts %}
 <script>
-  // Guard: don’t crash if elements missing
-  const issueDateEl = document.getElementById('issue_date');
-  if (issueDateEl) issueDateEl.valueAsDate = new Date();
+const issueDateEl = document.getElementById('issue_date');
+if (issueDateEl) issueDateEl.valueAsDate = new Date();
 
-  function updateCourseName() {
-    const sel = document.getElementById('course_id');
-    const opt = sel && sel.options[sel.selectedIndex];
-    const name = opt ? (opt.getAttribute('data-name') || '') : '';
-    const hidden = document.getElementById('course_name');
-    if (hidden) hidden.value = name;
-  }
+function updateCourseName() {
+  const sel = document.getElementById('course_id');
+  const opt = sel && sel.options[sel.selectedIndex];
+  const hidden = document.getElementById('course_name');
+  if (hidden) hidden.value = opt ? (opt.getAttribute('data-name') || '') : '';
+}
 
-  function switchTab(e, tab) {
-    // Buttons
-    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    // Content
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    const target = document.getElementById(tab + '-tab');
-    if (target) target.classList.add('active');
-    // Clear the other input
-    if (tab === 'manual') {
-      const csv = document.getElementById('csv_file'); if (csv) csv.value = '';
-    } else {
-      const names = document.getElementById('names'); if (names) names.value = '';
-    }
-  }
+function switchTab(e, tab) {
+  document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const target = document.getElementById(tab + '-tab');
+  if (target) target.classList.add('active');
+  // Clear the other input
+  if (tab === 'manual') document.getElementById('csv_file').value = '';
+  else document.getElementById('names').value = '';
+}
 
-  // Show/hide email settings warning (you could replace with an API check)
-  const sendBox = document.getElementById('send_emails');
-  const warn = document.getElementById('email-warning');
-  if (sendBox && warn) {
-    sendBox.addEventListener('change', () => {
-      warn.style.display = sendBox.checked ? 'block' : 'none';
-    });
-  }
-
-  // Progressive enhancement: try to (re)load options via JSON endpoints
-  // Includes credentials so the session cookie is sent.
-  fetch('{{ url_for("get_courses_json") }}', { credentials: 'same-origin' })
-    .then(res => {
-      if (!res.ok) throw new Error('Courses request failed: ' + res.status);
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) throw new Error('Courses returned non-JSON (maybe login redirect)');
-      return res.json();
-    })
-    .then(courses => {
-      const sel = document.getElementById('course_id'); if (!sel) return;
-      // Avoid duplicating existing server-rendered options by checking existing ids
-      const existing = new Set(Array.from(sel.options).map(o => o.value));
-      courses.forEach(c => {
-        if (existing.has(String(c.id))) return;
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.textContent = `${c.name} (${c.code})`;
-        opt.setAttribute('data-name', c.name);
-        sel.appendChild(opt);
-      });
-    })
-    .catch(err => console.error(err));
-
-  fetch('{{ url_for("get_templates_json") }}', { credentials: 'same-origin' })
-    .then(res => {
-      if (!res.ok) throw new Error('Templates request failed: ' + res.status);
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) throw new Error('Templates returned non-JSON (maybe login redirect)');
-      return res.json();
-    })
-    .then(templates => {
-      const sel = document.getElementById('template_id'); if (!sel) return;
-      const existing = new Set(Array.from(sel.options).map(o => o.value));
-      templates.forEach(t => {
-        if (existing.has(String(t.id))) return;
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = t.name;
-        sel.appendChild(opt);
-      });
-    })
-    .catch(err => console.error(err));
+const sendBox = document.getElementById('send_emails');
+const warn = document.getElementById('email-warning');
+if (sendBox && warn) {
+  sendBox.addEventListener('change', () => { warn.style.display = sendBox.checked ? 'block' : 'none'; });
+}
 </script>
 {% endblock %}
