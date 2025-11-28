@@ -24,6 +24,7 @@ import threading
 import re
 import uuid
 from utils.template_selector import pick_template
+import socket
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'
@@ -335,8 +336,12 @@ def generate_certificate_pdf(cert_data):
     pdf_canvas.setFont("Helvetica", 14)
     pdf_canvas.drawCentredString(width/2, height-370 if not logo_path else height-420, f"Date of Completion: {cert_data['issue_date']}")
 
+    # Get local LAN IP
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+
     # QR Code (local verify)
-    verify_url = f"http://localhost:5000/verify/{cert_data['certificate_id']}"
+    verify_url = f"http://{local_ip}:5000/verify/{cert_data['certificate_id']}"
     qr = qrcode.QRCode(version=1, box_size=3, border=2)
     qr.add_data(verify_url)
     qr.make(fit=True)
